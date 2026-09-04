@@ -1,0 +1,869 @@
+\documentclass{article}
+
+\usepackage{iclr2027_conference,times}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{array}
+\usepackage{textcomp}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{placeins}
+\usepackage{microtype}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+
+\newif\iffinalversion
+\finalversionfalse
+\iffinalversion\iclrfinalcopy\fi
+
+\newcommand{\plotdir}{plots}
+% The height cap is a backstop, not a size: it has to stay ABOVE the tallest panel's own
+% height or keepaspectratio scales that figure down to meet it and takes its type with it.
+% The tallest are the two \halfplot charts at 0.86 aspect -- 0.526\textheight each.
+\newcommand{\panelplot}[1]{%
+  \includegraphics[width=\linewidth,height=0.55\textheight,keepaspectratio]{#1}}
+\let\halfplot\panelplot
+\newenvironment{chartfigure}{\begin{figure}[tb]}{\end{figure}}
+
+
+\title{Zero-Shot Self-Orchestration with Ledger-Based Control \\
+Improves Coding in Language Models}
+
+\author{%
+  Victor Gao\thanks{Equal contribution.}\ \ \thanks{Persis Capital Inc.} \quad
+  Vida Khosrowshahi\footnotemark[1]\ \footnotemark[2] \quad
+  Ali Khosrowshahi\footnotemark[1]\ \footnotemark[2] \\
+  Xihao Sun\footnotemark[2] \quad
+  Juhyun Lee \quad
+  Simon (Sang Won) Lee\footnotemark[2] \\
+  \texttt{slee@persisholdings.com}
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Frontier coding performance is typically bought with larger proprietary models at high
+cost. We introduce ledger-based zero-shot self-orchestration, a training-free method in
+which fresh instances of one model decompose problems and coordinate through a shared
+filesystem holding a plan, notes and current solution. Across nine open and closed-weight
+models on the 100 latest \emph{hard} LiveCodeBench problems, the method yields gains of up
+to 23.4 percentage points on pinned backends and offers two routes to near-frontier
+accuracy. Orchestrated GPT-5.6-Terra reaches 85.0\% pass@1 against Fable 5's 87.4\% at 19\%
+of the cost, and locally served, open-weight Qwen3.8-27B rises from 63.0\% to 86.4\%. Gains
+are not universal: some models are unchanged or worse. Transcript analysis attributes the
+gain to decomposition and persistent context. Inference-time organization can approach
+frontier coding accuracy at a fraction of the cost, or on self-hostable weights.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+
+Large language models (LLMs) are increasingly deployed not as single-shot predictors but as
+\emph{agents}: models wrapped in a scaffold that lets them plan, call tools, keep notes,
+and revise their work over multiple turns. A popular approach to make LLMs is to run \emph{several}
+such agents together, on the intuition that a team that decomposes a problem and pools
+partial results should beat a single model answering in one pass. That intuition has
+produced a large literature \citep{guo2024}, but the evidence is mixed \citep{wangq2024}
+and much of it confounded \citep{tran2026}: multi-agent pipelines usually change token
+budgets, tool calls, prompts and retrieval at once, so an aggregate gain rarely identifies
+which factor helped.
+
+We use \emph{agent} to mean a separately prompted model invocation with a distinct role and
+a fresh context; all agents share one underlying model. We call the method studied here
+zero-shot self-orchestration: the orchestrator is neither trained for orchestration nor
+given task-specific demonstrations of how to decompose or coordinate the problem. Three
+properties define it: a shared filesystem workspace --- the \emph{ledger} --- that persists
+a plan, notes and current solution across invocations; a manager that re-curates the task
+list each round and decides when to stop, rather than following a fixed pipeline; and no
+training or per-benchmark tuning, every model role being the same model in a fresh context
+with a short generic prompt. Section~\ref{sec:method} describes the loop and
+Appendix~\ref{app:scaffold} gives it in full.
+
+On the 100 most recent \emph{hard} LiveCodeBench problems \citep{jain2024}, our training-free
+filesystem scaffold improves all three models tested in both arms on a pinned backend by 8.0 to
+23.4 points across five paired passes, despite using no router, reward model, search policy,
+or benchmark-specific tuning
+(Sections~\ref{sec:method} and~\ref{sec:pinned}). Although the scaffold roughly triples the
+bill, orchestrating a cheaper model remains the less expensive route to comparable accuracy in
+every supported comparison: orchestrated GPT-5.6-Terra trails Claude Fable 5 by 2.4 points
+while costing \$11.71 rather than \$61.11 per pass, Qwen3.8-27B comes within 1.0 point, and
+GPT-5.6-Luna matches GPT-5.6-Terra's single-call performance at 44\% of the price
+(Section~\ref{sec:cost}). These gains diminish as single-call performance rises and can
+disappear or reverse: two of the nine models come out flat or negative, with Qwen3.6-35B's
+transcripts under reasoning off showing deliberation discarding correct approaches and
+unverified worker output overwriting correct work
+(Sections~\ref{sec:openrouter} and~\ref{sec:discussion}). We also correct a LiveCodeBench
+evaluator bug that penalizes a common input-reading idiom and may therefore affect previously
+reported scores (Appendix~\ref{app:evaluator}).
+
+\section{Related work}
+\label{sec:related}
+
+Multi-agent systems build on single-agent scaffolds that add structure around one model
+\citep{yao2022,shinn2023,madaan2023}; our worker role is an instance of that idea, and what
+we vary is the coordination layer above it. Prior systems differ mainly in how that layer is
+decided. One line \emph{trains} the coordinator: Fugu \citep{sakana2026} learns to assemble
+and direct a pool of expert workers per query, and Conductor \citep{nielsen2025} is a 7B
+model RL-trained to design worker communication topologies; earlier query routers learn to
+pick a model per query \citep{ong2024}. A second fixes roles and hand-off order in advance,
+so every problem flows through the same pipeline
+\citep{hong2023,qian2023,li2023,huang2023,islam2024}, while frameworks such as AutoGen
+\citep{wu2023} instead supply configurable conversable agents and leave the conversation
+pattern open; Trinity \citep{xu2025} sits at the boundary with the first, fixing a
+three-role workflow but learning which model fills each role. A third coordinates through a
+shared store rather than a pipeline --- ARIADNE \citep{wei2026} pairs a blackboard with MCTS
+on program generation, LbMAS \citep{han2025} mediates all communication through a global
+board --- or decentralizes entirely, through debate \citep{du2023} or sampling and voting
+\citep{li2024}; Mixture-of-Agents \citep{wangj2024a} instead aggregates in layers. A
+separate line asks not how coordination is decided but whether reported gains survive
+equalizing test-time compute \citep{wangj2024b,tran2026}.
+
+Ours is the training-free counterpart to the first family and the dynamic counterpart to the
+second. The manager is a fixed prompt with no learning, which lets us ask how much of the
+orchestration benefit is available \emph{without} training, and when it materializes. Its
+workspace is a shared store like ARIADNE's blackboard, but coordination is one manager's
+plain task-list loop: no MCTS, no reward model, no learned search policy. We do not attempt
+an equal-token comparison --- the loop necessarily spends more than a single call --- and
+instead ask whether that spend buys better solutions, and whether it buys them more cheaply
+than moving to a larger model would, measured throughout against the same model answering in
+one call.
+
+\section{Method}
+\label{sec:method}
+
+Every role but the verifier is the same underlying model, called in a fresh context and
+coordinating through a shared workspace on disk:
+
+\begin{center}
+\small
+\begin{tabular}{@{}ll@{}}
+\texttt{<ws>/task.md}     & the problem statement \\
+\texttt{<ws>/plan.md}     & the manager's overarching plan \\
+\texttt{<ws>/tasks.json}  & a debug mirror of the task list \\
+\texttt{<ws>/notes.md}    & curated ideas / findings / partial proofs \\
+\texttt{<ws>/solution.py} & the current solution \\
+\end{tabular}
+\end{center}
+
+Workers never talk to each other; each sees the ledger plus the one task the manager
+assigns. The control flow (Figure~\ref{fig:loop}) is:
+
+\begin{enumerate}
+  \item \textbf{Manager --- plan.} The manager reads the problem and writes a 3--6 sentence
+  strategy plus 3--6 concrete seed tasks.
+
+  \item \textbf{Worker --- brainstorm (ideation).} The first worker does \emph{not} write a
+  solution; it identifies the core difficulty, lists candidate approaches and pitfalls, and
+  appends them to \texttt{notes.md}, proposing next steps.
+
+  \item \textbf{Manager --- manage (loop).} The manager folds the plan and the brainstorm
+  into one curated task list (merging duplicates, marking done items, adding only genuinely
+  new sub-tasks), then either declares the problem done or names the single next task.
+
+  \item \textbf{Worker --- do the task.} A fresh worker executes that one task and rewrites
+  both \texttt{solution.py} and \texttt{notes.md} --- the notes are replaced by a curated
+  whole rather than appended to --- then proposes remaining steps.
+
+  \item \textbf{Verifier --- run the public tests.} Whenever the round's worker produced a
+  fresh candidate, the program is executed against the problem's public stdin tests where it
+  has them. The pass/fail verdict, with the first failing case, is fed back to the manager
+  and treated as ground truth: a failing run overrides a done verdict, forcing the loop to
+  continue with a fix-or-switch task. Control returns to the manager (step 3).
+
+  \item \textbf{Finalizer.} A finalization worker emits the definitive solution whenever the
+  loop ends without a clean sign-off --- the round budget is spent, the manager reissues a
+  task it just handed out, or it names no task at all. The call is skipped when the manager
+  declares the problem done and a usable solution is already on disk, so a redundant final
+  pass cannot overwrite a correct answer.
+\end{enumerate}
+
+\begin{figure}[tb]
+\centering
+% The height cap has to stay ABOVE the panel's own height (0.447\textheight here) or
+% keepaspectratio scales the figure to fit it and takes the type down with it.
+\includegraphics[width=\linewidth,height=0.46\textheight,keepaspectratio]%
+  {\plotdir/how_the_manager_arm_answers_one_question_multiagent_py_current_tree_light.pdf}
+\caption{\textbf{Manager--worker control flow}, as the v2 scaffold runs it. Boxes labelled
+with an agent are model calls in a fresh context; the decisions, the start and end nodes,
+and the sample-test run are harness logic and call no model. The boxes absent from the
+original scaffold are the verifier of step 5 and the cut-off summarizer.}
+\label{fig:loop}
+\end{figure}
+
+Guards: a round budget of 10 manager$\to$worker cycles
+(\texttt{MAX\_ITERS}); a no-progress guard (if the manager reissues the exact task it just
+handed out, the loop stops); and a cut-off summarizer: a worker that hits the token cap
+mid-attempt has its partial reasoning summarized by a fresh short call so its ideas still
+reach the manager. The plan and notes files are capped when written, at 4,000 and 8,000
+characters, so neither grows without bound across rounds.
+
+\paragraph{Baseline.} The single-call baseline is the same model, at the same temperature as
+the manager arm's workers (0.2), given the same problem in exactly one call --- no shared
+workspace, no loop, and no other role in the prompt. The single call receives the solver
+system prompt verbatim; the manager arm's task workers receive that same prompt wrapped in a
+subagent preamble and a four-section output contract, and their user message additionally
+carries the plan, the current notes and the current solution. The two arms differ only in
+that scaffold. Appendix~\ref{app:scaffold} gives the per-role temperatures and the five
+differences between this scaffold (v2) and the original one that produced the
+OpenRouter-served results of Section~\ref{sec:openrouter}.
+
+\section{Experimental setup}
+\label{sec:setup}
+
+\paragraph{Benchmark.} LiveCodeBench code-generation, release\_v6 \citep{jain2024}: the 100
+most recent problems in the hard split by contest date, which limits training-data
+contamination \citep{jain2024}. We refer to this set as LCB-100. Solutions are graded by
+LiveCodeBench's own hidden-test evaluator, after the correction described in
+Appendix~\ref{app:evaluator}; every number below is post-correction. The verifier of step 5
+runs only stdin-format public tests, which 73 of the 100 problems carry.
+
+\paragraph{Models and serving.} Nine model configurations: Qwen3.5-9B \citep{qwen2026a},
+Qwen3.6-35B-A3B \citep{qwen2026b}, Qwen3.8-27B \citep{qwen2026c} (open weights, served
+locally in FP8), MiniMax-M3 \citep{minimax2026}, Kimi-K3 \citep{moonshot2026}, and the closed
+frontier models Opus-5 \citep{anthropic2026}, the two GPT-5.6 variants Terra and Luna
+\citep{openai2026}, and Claude Fable 5 \citep{anthropic2026}. Serving splits the set in two.
+The four \emph{pinned-backend} models are served on one fixed backend for v2 comparison: Terra and Luna by the OpenAI API, Qwen3.8-27B by our own vLLM, Fable 5 by the
+Anthropic Messages API; because gateway routing proved the dominant source of run-to-run
+noise (Section~\ref{sec:discussion}). The five \emph{OpenRouter-served} models ran through a
+single OpenAI-compatible gateway on the original scaffold, and are reported separately in
+Section~\ref{sec:openrouter} because both the serving path and the scaffold version differ.
+Fable 5 was run single-only, so it contributes no manager delta.
+
+\paragraph{Conditions.} The pinned-backend set runs at one setting --- 128k output cap,
+reasoning on, $\times 5$ passes --- with Terra, Luna and Qwen3.8-27B in both arms. The cap is
+a per-call \texttt{max\_tokens} bound, not a context-window limit. The OpenRouter-served set
+runs at three: 128k reasoning-on $\times 1$; 16k reasoning-off $\times 5$; and 128k
+reasoning-off $\times 1$ as a control isolating the small cap. Appendix~\ref{app:protocol}
+gives the reasoning-effort settings per provider, the instrumentation, and the cap-matching
+replay used for Qwen3.8-27B's single arm.
+
+\paragraph{Statistics.} Reported $\pm$SD is the sample SD (divisor $n-1 = 4$) of the five
+pass scores. Five-pass comparisons use a paired sign-flip permutation test on per-problem
+mean $\Delta$ ($n = 100$ problems; $2\times10^{5}$ resamples), Holm-corrected where a family
+of models is tested; 95\% $t$-intervals for mean pass@1 across the five passes
+($\mathrm{df} = 4$). Pooled problem$\times$pass agreement uses exact McNemar on the
+discordants, treating cells as independent.
+
+\section{Results}
+\label{sec:results}
+
+\subsection{Pinned-backend arms, five passes}
+\label{sec:pinned}
+
+\input{fig-4new-5pass}
+
+Our headline condition is four models, each run five independent times on LCB-100 at a 128k
+cap with reasoning on. Every arm is served on a pinned backend and runs the v2 scaffold except Fable 5. The
+earlier runs of the OpenRouter-served set (Section~\ref{sec:openrouter}) cover more models,
+but only their 16k reasoning-off condition repeats; the rest are one pass each, through a
+gateway whose routing proved the main source of run-to-run noise.
+
+\textbf{All three models with both arms benefit from the manager.} It also narrows
+run-to-run spread wherever that spread was wide, for Luna and Qwen3.8-27B alike. Luna's
+per-pass $\Delta$ swings across a wide band, so its effect is real but its per-pass estimate
+unstable; Terra's flat band is the more reliable. Qwen3.8-27B gains most, its manager arm
+reaching Fable 5's single-call range here, and Opus-5's in the OpenRouter-served set. The
+direction matches that set's reasoning-on pattern: the smaller the model, the more the
+scaffold has to add.
+
+Figure~\ref{fig:main} orders the four models by single-call score: the manager's gain shrinks
+monotonically as the single call gets stronger, with two of the manager arms here coming
+within a few points of Fable 5's single call, whose lone bar marks where that trend is
+heading.
+
+\subsection{What the scaffold costs}
+\label{sec:cost}
+
+Every $\Delta$ in the pinned-backend set is bought with tokens. The manager replaces one call
+with a plan, a brainstorm, up to ten worker rounds and a finalization pass, and every one of
+those is billed. The scaffold roughly triples the bill. Every arm
+priced here is at the same 128k output cap, Qwen3.8-27B's single call included
+(Appendix~\ref{app:protocol}).
+
+\input{fig-cost}
+
+\textbf{The scaffold's move is up and to the right in every case.}
+Figure~\ref{fig:cost-vs-score} plots price against accuracy for all seven arms, joining the
+two arms of each model that has both: every manager arm gains accuracy over its own single
+call, and every one costs more. What the extra dollar buys varies by an order of magnitude,
+tracking the spread in base prices. The frontier is nearly flat at the top.
+
+\textbf{The base cost varies across models.} A single-call pass on Qwen3.8-27B emits more
+than twenty times the output tokens of either OpenAI model: the open model reasons its way to
+its score at length; the OpenAI models reach theirs in a fraction of the tokens. Since
+reasoning bills as output, a bill here is as much a fact about how much reasoning a provider
+lets a model emit as about the scaffold wrapped around it.
+
+\paragraph{Three comparisons along the frontier.}
+First, GPT-5.6-Terra with a manager nearly matches Fable 5 for a fifth of the price
+(Figure~\ref{fig:cost}). The gap is within error (Figure~\ref{fig:main}), with a one-sided
+95\% bound allowing a deficit of 5.8 points, while the saving is significant. Both arms are
+priced off API list rates in effect when the experiments were run
+\citep{openai2026price,anthropic2026price}.
+
+Second, Qwen3.8-27B with a manager comes within a point of Fable 5's accuracy and costs less.
+That difference is again within error, the one-sided 95\% bound allowing a deficit of up to
+4.8 points. The cost uses a third-party OpenRouter host rate \citep{openrouter2026}; our test
+ran locally, and anyone with capable hardware could host it for less.
+
+Third, the two GPT-5.6 models make the clearest case for spending on the scaffold rather than
+on the model: GPT-5.6-Luna with a manager matches GPT-5.6-Terra's single call on accuracy at
+under half the price. Luna's lead is not itself significant, but there is no sign of a deficit
+either, and the bound rules out its trailing by more than 2.4 points.
+
+\subsection{The effect of truncation}
+\label{sec:truncation}
+
+Empty solutions are automatic fails, so any condition that emits fewer of them gains pass@1
+without solving more problems. Per-call \texttt{finish\_reason} separates that channel from
+genuine problem-solving exactly (Table~\ref{tab:caps}). Neither GPT-5.6 model truncates or
+emits an empty answer across all 2{,}000 of their problem-passes, so their $\Delta$s in the
+pinned-backend set carry no rescue component. The channel is largest on Qwen3.8-27B, and even
+there a cut-off rate is not a loss rate: most truncated generations still contain a complete
+solution, written inside the reasoning stream before the cap arrived and recovered from there
+by the extractor. Of the single arm's 35 empty cells, the manager solves 25, fails 10 and
+leaves none empty, worth 5.0 points, about a fifth of its gain --- a cut-off worker costs a
+round rather than the answer. Served locally at a 262{,}144-token context, Qwen3.8-27B's
+single arm was in fact generated at 250k and cap-matched to 128k afterwards
+(Appendix~\ref{app:protocol}); read at its original 250k cap it gains a little more, by
+shrinking the truncation tail rather than lifting the run (Table~\ref{tab:qwen-caps}). That
+reading is exploratory, cap-matched to nothing else in the paper, so it cannot carry a
+$\Delta$ against the manager arm. Re-scoring each single arm over only the problem-passes
+where it emitted code bounds the effect model by model (Table~\ref{tab:emitted}); Fable 5
+gains 1.6 points there, six of its nine empty cells being safety refusals rather than
+truncations (Section~\ref{sec:discussion}).
+
+\subsection{The OpenRouter-served model set}
+\label{sec:openrouter}
+
+The five models below were served through the OpenRouter gateway and run on the original
+scaffold, so they are not directly comparable to the pinned-backend arms above.
+Table~\ref{tab:openrouter} collects every condition.
+
+\paragraph{Reasoning on.} Opus-5 tops the study, its $+6$ a net of seven problems gained and
+one lost. The largest gains come from the smaller models (Figure~\ref{fig:scale-bars}a):
+ordered by scale, the single curve rises further than the manager curve, so the scaffold
+narrows the spread across model sizes (Figure~\ref{fig:scale-on}, which plots the same numbers
+against parameter count).
+
+\paragraph{Reasoning off.} We ran five independent
+passes per condition at a 16k cap plus a one-pass 128k control. Run-to-run spread across the
+five passes is small. The manager effect is significant for three
+of four models, and a Tukey HSD separates Kimi-K3 from all three others and MiniMax-M3 from
+Qwen3.6-35B; Qwen3.5-9B sits between those two and separates from neither
+(Figure~\ref{fig:scale-bars}b; Figure~\ref{fig:scale-16k} by scale).
+
+The 128k control largely eliminates truncation and reproduces the ordering
+(Figure~\ref{fig:scale-bars}c). Empty output is not fully removed --- single-arm emit rates
+(non-empty completions) run below the manager's throughout, so part of the gap at the small
+end remains an emit-rate effect --- but it cannot explain Kimi-K3, where a 4-point emit gap
+accompanies a score gap ten times larger and neither of its arms truncates here at all. Unlike
+the reasoning-on setting, the single and manager curves diverge here
+(Figure~\ref{fig:scale-off}), though the two settings span different model sets.
+
+\section{Discussion}
+\label{sec:discussion}
+
+Table~\ref{tab:transcripts} collects one transcript per model in which the single call failed
+and the manager arm solved the problem. Three mechanisms recur. The scaffold commits the
+reduction or the bounding argument to disk before any code is written, so the next call builds
+on it instead of re-deriving it. It splits coupled objectives into pieces that are implemented
+separately. And it bounds each call, so a model that would otherwise talk past its output cap
+gets its work written down. In two cases the manager's solution is also markedly smaller than
+the failed single-call one.
+
+Truncation is a second place the scaffold earns its keep. State lives in \texttt{plan.md},
+\texttt{notes.md} and \texttt{solution.py} rather than in one ever-growing transcript, and
+each worker sees a curated view of it --- plan, notes, current solution, one task --- instead
+of the full history. The workspace is external memory that the token cap cannot truncate.
+
+That matters because a generation left to run to a very large cap does not merely risk being
+cut off; it can degrade the model. Eight of the fourteen Qwen3.8-27B single calls that spent a
+full 250k budget without emitting code collapse into repetition --- on \texttt{abc399\_e},
+7{,}743 copies of one line --- most of the eight inventing edge cases against a candidate
+solution and answering each in turn, hundreds to thousands of times, without terminating. This
+is the mechanism behind the otherwise odd finding of Section~\ref{sec:truncation} that most
+cut-off generations still contain a complete solution: the model had reached an answer and
+then talked past the cap re-checking it. Bounding each call keeps the work far from the cap and
+gets it onto disk.
+
+The same argument should extend beyond this benchmark, though we do not test it. A task whose
+inputs or intended output do not fit in one call --- a codebase larger than the context window,
+a deliverable longer than the output ceiling --- is not solvable in one call at any reasoning
+effort, whereas a sequence of bounded steps can carry it.
+
+The manager helps most where the base model is least able to organize its own reasoning, and
+that weakness takes two forms. The first is having no internal planning stage at all: with
+reasoning disabled a single call jumps straight to code, and the scaffold supplies a planning
+space, on disk and across calls, that the model would not otherwise use
+(Figure~\ref{fig:scale-bars}c). The second is reasoning that runs away: Qwen3.6-35B with
+reasoning on spends its whole budget deliberating, and gains more here than in any of its other
+conditions (Figure~\ref{fig:scale-bars}a). Where a model can both plan internally and stop on
+its own, the scaffold has less to add.
+
+The manager is not free: its deliberation can settle on a worse answer than a single call would
+have produced. On LCB 3765 (Qwen3.6-35B, 128k, reasoning off) the ideation stage identified the
+same optimization the single call had used, talked itself out of it as too error-prone, and
+committed instead to an asymptotically slower plan that a worker then implemented with a further
+bug --- compact, correct code disturbed rather than helped by decomposition. Qwen3.6-35B with
+reasoning off is the standout loser on this pattern, negative at both caps.
+
+\textbf{Two inexpensive, training-free additions could address the two halves of that failure},
+the plan that was wrong and the implementation that went unchecked. First,
+\emph{fresh-perspective workers}. Every worker inherits the notes and the current solution, so a
+wrong early approach anchors everything downstream. Spawning some workers with the raw problem
+statement and no prior context would give the manager an independent attempt to compare against,
+protecting the tight single-call solution the scaffold otherwise disturbs --- the intuition
+behind sampling-and-voting and debate \citep{li2024,du2023}. Second, \emph{verification instead
+of trust}: the manager currently accepts a worker's report on the basis of a sanity check against
+the problem's own samples, so a confidently-wrong solution propagates unchecked and can overwrite
+a correct intermediate answer. Running each candidate against a generated test suite before
+acceptance would catch regressions of this kind, at the cost of extra calls.
+
+\subsection{Limitations}
+\label{sec:limitations}
+
+\begin{itemize}
+  \item \textbf{Serving-provider reliability (OpenRouter-served set only).} The five models of
+  that set ran through OpenRouter's multi-provider routing, a substantial and
+  \emph{time-varying} confound: providers intermittently stalled, dropped the response
+  mid-stream, returned error objects, clamped output below the requested cap, or returned
+  reasoning-only replies. An attempt with no usable completion is scored a failure, so its
+  pass@1 counts infrastructure failures as wrong answers --- a conservative lower bound, and not
+  exactly reproducible, since it depends on provider health at run time. Both arms draw on the
+  same provider pool, so the single-vs-manager comparison is less sensitive to this than the
+  absolute levels are. This confound is what motivated the pinned-backend set, which is why
+  those arms and not the OpenRouter sweep carry the paper's headline claims.
+
+  \item \textbf{Provider-served weights may vary (OpenRouter-served set only).} OpenRouter does
+  not guarantee one quantization or build per model, adding a second, smaller source of
+  run-to-run variation on top of decoding temperature. The headline arms are pinned to one
+  backend each, and the locally served Qwen3.8-27B to a specific FP8 checkpoint.
+
+  \item \textbf{Single pass in the OpenRouter-served set.} The reasoning-on and 128k
+  reasoning-off comparisons there are one pass per condition, to limit API cost, so their deltas
+  are point estimates within the ${\sim}4.5$ percentage points of pass-to-pass variation the 16k
+  five-pass runs show on a manager-minus-single delta; per-model significance rests on those
+  five-pass runs. It is also why Opus-5's $85 \to 91$, the highest score in the paper, remains a
+  point estimate rather than a measured effect.
+
+  \item \textbf{Fable 5 has no manager arm.} It was run single-only, so the strongest
+  single-call result in the paper is also the one condition where we cannot say what the scaffold
+  would do.
+
+  \item \textbf{Refusals are scored as failures, and only one arm can incur them.} Fable 5
+  returned \texttt{stop\_reason=refusal} on 6 of 500 problem-passes, spread over three ordinary
+  competitive-programming problems and never deterministic. We deliberately configure no fallback
+  model, since a cell labeled Fable 5 must contain Fable 5's outcome, but the consequence is that
+  its score carries ${\sim}1.2$ points of classifier penalty no other arm is exposed to, as
+  variance rather than a constant offset. Comparisons \emph{against} Fable 5 are therefore mildly
+  conservative in its disfavor.
+
+  \item \textbf{Qwen3.8-27B's 128k single arm is a replay, not an independent run.} Those
+  generations were produced at 250k and truncated to 128k after the fact
+  (Appendix~\ref{app:protocol}). It is the right comparison for isolating the cap --- identical
+  generations either side --- but it cannot capture how the model might have budgeted its
+  reasoning had it been told the smaller limit up front; we report the as-generated 250k reading
+  alongside it (Section~\ref{sec:truncation}).
+
+  \item \textbf{A 9B model with reasoning on was untestable.} Qwen3.5-9B with reasoning enabled
+  could not be evaluated in any configuration we tried: through OpenRouter it generates unbounded
+  reasoning and returns reasoning-only replies or truncates before an answer appears, and no token
+  or effort setting fixed it; locally the checkpoint refused batching, leaving zero completed
+  calls. We report it as a model limitation rather than a data point, and it bounds how small a
+  ``reasoning'' model this scaffold can be applied to.
+
+  \item \textbf{One benchmark family.} All reported results are competitive-programming code
+  generation. Math and knowledge benchmarks (AIME, MATH-500, GPQA, HLE) were run in exploratory
+  form but are not reported: on a probe of the ten hardest problems in each, the frontier models
+  sit at or near ceiling, leaving little headroom in which to measure a scaffold effect.
+\end{itemize}
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+With the underlying model held fixed, a training-free manager--worker scaffold over a shared
+filesystem improves coding accuracy on every pinned-backend model we ran in both arms. Nothing
+in the loop is learned: the coordination is a directory of files that successive invocations of
+the same model read and overwrite, driven by one short generic prompt. Transcript analysis
+attributes the gain to decomposition and to context that persists across calls.
+
+The scaffold roughly triples the token bill, yet in every comparison our data supports,
+orchestrating a cheaper model was the less expensive route to a given accuracy than switching to
+a larger one. That leaves two ways to approach frontier coding accuracy without paying frontier
+prices: orchestrate a cheaper API model, or orchestrate open weights small enough to serve
+locally. The result is conditional rather than general --- the gains shrink as the single call
+gets stronger, and some configurations come out flat or worse, where deliberation displaces an
+approach that was already right --- but where it holds, inference-time organization substitutes
+for model scale.
+
+\subsection*{AI use statement}
+
+In this work, we used generative AI tools as the object of study: every experimental result is a
+measurement of language-model output, produced by the scaffold and baselines described in
+Section~\ref{sec:method} and released with the code. Separately, generative AI tools assisted
+with writing and editing the manuscript, with implementing the orchestration harness and the
+analysis and plotting scripts, and with literature search. We did not use generative AI tools to
+generate, impute or alter any experimental result, and all reported numbers are computed by the
+released scripts directly from the stored run outputs. We have reviewed all AI-assisted work: the
+harness and analysis code was read and tested by the authors, the corrected evaluator of
+Appendix~\ref{app:evaluator} was found and verified by manual inspection of transcripts, and every
+citation was checked against its primary source. We take responsibility for the final content of
+this work, including text, claims and artifacts produced with the aid of generative AI.
+
+\subsection*{Ethics statement}
+
+This work involves no human subjects, no personal data and no new dataset release; the evaluation
+set is the public \emph{hard} split of LiveCodeBench release\_v6 \citep{jain2024}. Two points bear
+on research integrity. First, one arm returned safety refusals that our protocol scores as
+failures (Section~\ref{sec:limitations}); we report the rate rather than substituting a fallback
+model, so a cell labeled with a model contains that model's outcome. Second, we report a defect in
+a widely used public evaluation harness (Appendix~\ref{app:evaluator}) and the corrected
+re-scoring of every number, rather than only the numbers that favor our method. The method itself
+is a general-purpose inference-time scaffold for code generation and inherits the dual-use profile
+of the underlying models; it lowers the cost of capable code generation, which applies to
+beneficial and to harmful code alike.
+
+\subsection*{Reproducibility statement}
+
+Section~\ref{sec:method} and Appendix~\ref{app:scaffold} specify the manager--worker loop, its
+guards and its per-role temperatures; Section~\ref{sec:setup} and Appendix~\ref{app:protocol} give
+the benchmark selection, the serving path and provider settings per model, the output caps and
+pass counts, the instrumentation, and the cap-matching replay procedure for Qwen3.8-27B's single
+arm. Appendix~\ref{app:evaluator} documents the evaluator defect and the fix, without which the
+reported numbers cannot be reproduced from the stored generations. The statistical procedures are
+given in Section~\ref{sec:setup}. Two sources of irreducibility are stated in
+Section~\ref{sec:limitations}: decoding temperature is non-zero, and the OpenRouter-served arms
+depend on provider health at run time. The pinned-backend arms, which carry the paper's claims,
+avoid the second.
+\iffinalversion
+The orchestration scaffold (both versions), the corrected LiveCodeBench evaluator, and the
+analysis and figure scripts that produce every number and figure in this paper are available at
+\url{https://github.com/slee-persis/GVS5H}, together with all run outputs supporting the results
+--- per-problem generations for every arm and condition, per-call \texttt{finish\_reason} and
+token logs where instrumented, and the manager arms' workspace transcripts (\texttt{runs/}).
+\else
+The scaffold, the corrected evaluator, the analysis and figure scripts, and all run outputs
+supporting the results --- per-problem generations for every arm and condition, per-call
+\texttt{finish\_reason} and token logs where instrumented, and the manager arms' workspace
+transcripts --- are provided as anonymized supplementary material, and will be released publicly
+on acceptance.
+\fi
+
+\iffinalversion
+\subsubsection*{Author contributions}
+
+\textbf{[To be completed before the camera-ready.]} For example: V.G., V.K. and A.K.\ conceived
+the study and built the scaffold; X.S.\ and J.L.\ ran the experiments and analysed the data;
+S.L.\ supervised the work; all authors wrote the paper.
+
+\subsubsection*{Acknowledgments}
+
+\textbf{[To be completed before the camera-ready --- funding sources, if any, and any non-author
+help to acknowledge.]}
+\fi
+
+\bibliography{references}
+\bibliographystyle{iclr2027_conference}
+
+\appendix
+
+\section{The scaffold in full}
+\label{app:scaffold}
+
+Section~\ref{sec:method} describes the current scaffold, v2, which produced the pinned-backend
+results and is drawn in Figure~\ref{fig:loop}. The original scaffold produced the
+OpenRouter-served set of Section~\ref{sec:openrouter}. It runs the same loop on closely matched
+prompts, with five differences, all of them on the manager arm: it allows 4 manager$\to$worker
+cycles rather than 10 (\texttt{MAX\_ITERS}); it has no public-test verifier at step 5; it has no
+cut-off summarizer; its workers append to \texttt{notes.md} rather than rewriting it; and the plan
+and notes files feeding a prompt are unbounded rather than capped.
+
+\paragraph{Temperatures.} The manager arm's generative calls use slightly higher temperatures,
+where the work is generative rather than executive: 0.3 to write the plan and 0.4 to brainstorm,
+against 0.2 for task execution and for curating the task list. The single-call baseline runs at
+0.2, matching the workers. These settings are identical in both scaffold versions.
+
+\paragraph{Verifier coverage.} The step-5 verifier runs only stdin-format public tests, which 73
+of the 100 problems carry; the other 27 are LeetCode-style, with call-based public tests the
+engine does not run, so those get no verifier signal and are checked by the hidden-test grader
+alone.
+
+\section{Benchmark and protocol in full}
+\label{app:protocol}
+
+\paragraph{Model sizes.} Qwen3.5-9B \citep{qwen2026a} (9B), Qwen3.6-35B-A3B \citep{qwen2026b} (35B
+total, 3B active per token), Qwen3.8-27B \citep{qwen2026c} (27B, open weights, served locally in
+FP8), MiniMax-M3 \citep{minimax2026} (428B total, ${\sim}23$B active), Kimi-K3
+\citep{moonshot2026} (${\sim}2.8$T total, ${\sim}16$ of 896 experts active per token), and the
+closed frontier models Opus-5 \citep{anthropic2026}, GPT-5.6-Terra and GPT-5.6-Luna
+\citep{openai2026} and Claude Fable 5 \citep{anthropic2026}, all four of undisclosed size.
+
+\paragraph{Caps.} The 128k figure is a per-call \texttt{max\_tokens} bound, not a context-window
+limit; for Opus-5, Fable 5 and the GPT-5.6 family it is also the provider's hard ceiling on one
+response \citep{anthropic2026,openai2026}. Locally served Qwen3.8-27B has no such ceiling; it is
+bounded by its 262{,}144-token context window \citep{qwen2026c} --- confirmed on the FP8 checkpoint
+as served (vLLM reports \texttt{max\_model\_len} = 262{,}144) --- shared by prompt and output,
+which puts the 250k setting of Section~\ref{sec:truncation} near its largest possible output.
+
+\paragraph{Conditions.} The pinned-backend set runs at one setting: 128k output cap, reasoning on,
+$\times 5$ passes, with Terra, Luna and Qwen3.8-27B in both arms and Fable 5 single-only. The
+OpenRouter-served set runs at three: 128k reasoning-on $\times 1$ (native
+\texttt{reasoning\_effort} where supported, a 20k reasoning budget where not); 16k reasoning-off
+$\times 5$, whose repeated passes give run-to-run variance and paired tests; and 128k reasoning-off
+$\times 1$, the same without the small cap, isolating it as a confound.
+
+\paragraph{Reasoning.} The output cap and the scaffold are matched across the seven pinned-backend
+arms; reasoning depth is not, because no two of these providers expose the same control over it.
+Qwen3.8-27B, on our own vLLM, is sent no \texttt{reasoning\_effort} --- the Qwen chat template
+leaves reasoning on and unbudgeted, bounded only by the 128k \texttt{max\_tokens}, which on this
+stack covers reasoning and answer together. The two GPT-5.6 models are likewise sent none, leaving
+them at OpenAI's model default. Fable 5 runs at \texttt{thinking: adaptive} with \texttt{display:
+summarized}, and \texttt{output\_config.effort} at \texttt{high}, the API default
+\citep{anthropic2026effort}.
+
+\paragraph{Instrumentation.} The two 128k-cap conditions log every call's \texttt{finish\_reason}
+and completion-token count, and give each problem a final status in \{\texttt{ok},
+\texttt{truncated}, \texttt{empty\_stop}, \texttt{empty}, \texttt{error}\}. The 16k $\times$ 5-pass
+runs predate this and record only the extracted code and its pass/fail. An empty code field scores
+as a failure.
+
+\paragraph{Cap-matching.} One arm is not natively cap-matched to its partner: Qwen3.8-27B's single
+call was generated at 250k while its manager arm ran at 128k (Section~\ref{sec:truncation}). To
+compare them at one cap we replay the stored generations rather than re-run the model: each is
+truncated to 128,000 output tokens, the solution re-extracted from that prefix, and the result
+scored on the same evaluator as every other cell (Appendix~\ref{app:evaluator}). Three details
+matter:
+
+\begin{itemize}
+  \item \textbf{Truncation is token-exact}, using the serving stack's own tokenizer, not a
+  character-count approximation. The deciding cases are those where a complete code block sits just
+  before or just after the boundary --- exactly the ones an approximate cut would misclassify.
+
+  \item \textbf{What is truncated is the whole output stream, reasoning then answer}, because that
+  is what the original cap bounded. Where the cut lands decides what the extractor sees: past the
+  reasoning it sees a truncated answer; inside the reasoning the answer does not exist at all, and
+  the harness's empty-content fallback hands it the truncated reasoning instead --- which is why so
+  many cut-off generations still yield gradeable code (Section~\ref{sec:truncation}).
+
+  \item \textbf{The cap is invisible to the model, which is what makes the replay exact.} This arm
+  ran on our own vLLM, where \texttt{max\_tokens} is enforced by the server: it never enters the
+  prompt, and generation simply cuts off at the limit --- 124 of the 500 calls end at
+  \texttt{finish\_reason=length}, abruptly rather than wound up. Nor is this local to vLLM: making a
+  budget visible to a model takes a separate, opt-in mechanism such as Anthropic's
+  \texttt{task\_budget}, while \texttt{max\_tokens} stays an enforced ceiling that truncates the
+  response \citep{anthropic2026effort}. The replay therefore does not differ from a genuine re-run
+  at 128k.
+\end{itemize}
+
+\section{A correction to the LiveCodeBench evaluator}
+\label{app:evaluator}
+
+While inspecting transcripts for Section~\ref{sec:discussion} we found a defect in the
+LiveCodeBench harness itself, and every number in Section~\ref{sec:results} is reported after
+fixing it. The evaluator does not run a candidate as a subprocess; it executes it in-process with
+\texttt{sys.stdin} replaced by a mock. That mock's binary view implemented \texttt{readline()} as
+\texttt{inputs.split(b"\textbackslash n")[0]} --- a \emph{stateless} expression that returns the
+first line on every call. A program reading multi-line input through
+\texttt{sys.stdin.buffer.readline()} therefore read line 1 repeatedly and failed however correct it
+was. The mock's text-mode \texttt{sys.stdin.readline} was implemented as a proper iterator, and
+\texttt{buffer.read()} returns the whole payload, so neither was affected --- which is why the
+common \texttt{sys.stdin.buffer.read().split()} idiom never exposed it. We replaced the mock's
+binary view with one backed by a \texttt{BytesIO} so that reads advance a position, and re-scored
+every stored generation; no model was re-run.
+
+We report it explicitly for two reasons. First, it interacts badly with the v2 verifier: that step
+runs the candidate as a \emph{real} subprocess (step 5 of Section~\ref{sec:method}), where
+\texttt{buffer.readline()} works correctly, so the manager was told its solution passed the public
+samples for programs the grader then marked wrong --- the loop's one external signal certifying a
+wrong answer. Second, the exposure is uneven across models rather than a constant offset: 311 of the
+3{,}456 pinned-backend outputs containing code use the idiom, and 97\% of those were scored wrong
+against 20\% for the outputs that do not. Fable 5 never uses it and its scores are unchanged to the
+decimal. The OpenRouter-served set reaches for it once in 5{,}012 generations containing code, and
+then through an alias --- Kimi-K3's single call on \texttt{abc396\_g} binds
+\texttt{sys.stdin.buffer} to a name and calls \texttt{readline()} on that. Every OpenRouter-served
+number is re-scored all the same, and exactly one cell moves: Kimi-K3's 128k reasoning-on single
+arm, from 82 to 83. Because the idiom is a matter of coding style, a harness bug of this shape is
+not a wash across a leaderboard --- it silently penalizes the models whose style trips it.
+
+\section{Additional results}
+\label{app:results}
+
+\input{fig-cost-tables}
+
+\input{fig-cost-vs-score}
+
+\begin{table}[htbp]
+\centering
+\caption{\textbf{Cap hits and empty solutions per arm.} Single (s) / manager (m), out of 500
+problem-passes each. A \emph{cap hit} is a graded generation that reached the token limit
+(\texttt{finish\_reason=length}): the single arm's one call, and for the manager its final answer
+call only --- internally 108 of its 3{,}235 calls also hit the cap, 95 of them workers, which the
+loop absorbs. \emph{No code} is a problem-pass that ended with nothing the extractor could grade.}
+\label{tab:caps}
+\small
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Model} & \textbf{Cap hits s / m} & \textbf{No code s / m} &
+\textbf{of which refusals} & \textbf{Cap} \\
+\midrule
+GPT-5.6-Terra  & 0 / 0            & 0 / 0          & 0 & 128k\textsuperscript{b} \\
+GPT-5.6-Luna   & 0 / 0            & 0 / 0          & 0 & 128k\textsuperscript{b} \\
+Qwen3.8-27B    & \textbf{150} / 5 & \textbf{35} / 0 & 0 & 128k\textsuperscript{a} \\
+Claude Fable 5 & 3 / --           & 9 / --         & \textbf{6} & 128k\textsuperscript{b} \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.6ex}
+\begin{minipage}{0.92\linewidth}
+\footnotesize
+\textsuperscript{a}~Every count in this table is at a 128k cap, so the rows are like-for-like.
+Qwen3.8-27B's manager arm ran natively at 128k; its single arm was run at 250k and is counted here
+cap-matched back to 128k. The 250k counts are given in Table~\ref{tab:qwen-caps}.\\
+\textsuperscript{b}~A \emph{hard} ceiling rather than a chosen setting: the GPT-5.6 family and
+Fable 5 both cap a synchronous API response at 128k output tokens (Appendix~\ref{app:protocol}), so
+for these three arms a truncation cannot be relieved by raising the cap. Qwen3.8-27B, served
+locally, has no such ceiling --- which is why its single arm could be run at 250k at all.
+\end{minipage}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{\textbf{Qwen3.8-27B's single arm read at both caps.} Cap-matched to 128k, and as generated
+at 250k.}
+\label{tab:qwen-caps}
+\small
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Qwen3.8-27B single} & \textbf{pass@1} & \textbf{Cut off by the cap} &
+\textbf{No code at all} \\
+\midrule
+128k (cap-matched, App.~\ref{app:protocol}) & $63.0 \pm 4.1$ & 150 / 500 \ (30.0\,\%) & 35 / 500 \ (7.0\,\%) \\
+250k (as generated)                         & $65.6 \pm 4.6$ & 124 / 500 \ (24.8\,\%) & 21 / 500 \ (4.2\,\%) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{\textbf{Each single arm re-scored} over only the problem-passes where it emitted code.}
+\label{tab:emitted}
+\small
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Model (single arm)} & \textbf{As scored} & \textbf{Emitted code} &
+\textbf{Restricted to those} \\
+\midrule
+GPT-5.6-Terra  & 77.0 & 500/500 & 77.0 \\
+GPT-5.6-Luna   & 67.2 & 500/500 & 67.2 \\
+Qwen3.8-27B    & 63.0 & 465/500 & 67.7 ($+4.7$) \\
+Claude Fable 5 & 87.4 & 491/500 & 89.0 ($+1.6$) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{\textbf{LCB-100 pass@1 (\%), single $\to$ manager.} For the OpenRouter-served models on the
+original scaffold. ``--'' = not run; Qwen3.5-9B reasoning-on returns reasoning-only replies and is
+unusable. The seven pinned-backend, five-pass arms are reported separately in
+Section~\ref{sec:results} and are not pooled here, because both the serving path and the scaffold
+version differ (Section~\ref{sec:setup}).}
+\label{tab:openrouter}
+\small
+\begin{tabular}{@{}llccc@{}}
+\toprule
+\textbf{Model} & \textbf{Params} & \textbf{128k $\cdot$ ON (1 pass)} &
+\textbf{128k $\cdot$ OFF (1 pass)} & \textbf{16k $\cdot$ OFF ($\times$5)} \\
+\midrule
+Opus-5        & n/a            & 85 $\to$ 91 (\textbf{+6})            & --                      & -- \\
+Kimi-K3       & ${\sim}2.8$T   & 83 $\to$ 82 ($-1$)                   & 32 $\to$ 74 (\textbf{+42}) & 32.2 $\to$ 62.6 (\textbf{+30.4}) \\
+MiniMax-M3    & 428B           & 60 $\to$ 66 (+6)                     & 25 $\to$ 37 (\textbf{+12}) & 21.2 $\to$ 32.2 (\textbf{+11.0}) \\
+Qwen3.6-35B   & 35B            & 25 $\to$ 43 (\textbf{+18})           & 35 $\to$ 26 ($-9$)         & 27.8 $\to$ 26.6 ($-1.2$) \\
+Qwen3.5-9B    & 9B             & \emph{unusable}                      & 17 $\to$ 20 (+3)           & 14.6 $\to$ 21.8 (\textbf{+7.2}) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[p]
+\centering
+\caption{\textbf{One transcript per model where the single call failed and the manager arm solved
+the problem} (Section~\ref{sec:discussion}). LCB problem IDs as in release\_v6; call counts are
+manager-arm model calls. Character counts are of the emitted program.}
+\label{tab:transcripts}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+% The four column widths plus the three gaps between them (2\tabcolsep each, so 24pt in
+% total) have to fit \linewidth. Stated as fractions rather than fixed cm so that stays
+% true: 0.93\linewidth of column and 24pt of gap is 392pt of the 396pt line. The widths
+% were 2.3/1.5/4.6/5.4cm, which summed with the gaps to 14.65cm against a 13.97cm line
+% and put the table 19.2pt into the right margin.
+\begin{tabular}{@{}p{0.155\linewidth}p{0.101\linewidth}p{0.310\linewidth}p{0.364\linewidth}@{}}
+\toprule
+\textbf{Model} \newline \textbf{(condition)} & \textbf{Problem} & \textbf{How the single call failed} &
+\textbf{What the scaffold added} \\
+\midrule
+Qwen3.5-9B \newline (128k, off) & abc385\_d & Timed out: a na\"ive per-segment scan of a path
+simulation. & The brainstorm flagged in writing that the check is $O(N\cdot M) \approx
+4\times10^{10}$ and prescribed a range-query structure \emph{before} any code --- the up-front
+planning a single pass skips (Section~\ref{sec:discussion}). \\
+\addlinespace
+Qwen3.6-35B \newline (on) & abc394\_f & Cut off mid-reasoning at 32,768 tokens; returned nothing. &
+Solved in one worker cycle: the brainstorm fixed the structural insight (an ``alkane'' subtree needs
+a degree-4 center and $\ge 5$ vertices); the worker used an iterative DFS to avoid a recursion-depth
+failure. The same 32k clamp was hit 115 times across this model's manager calls, but with several
+attempts per problem one clamped call no longer costs the problem. \\
+\addlinespace
+MiniMax-M3 \newline (on) & 3701 & Printed nothing on \texttt{cdcd}: the lexicographic-reconstruction
+branch was broken. & Split the two coupled objectives across worker cycles --- one worker on the
+forward cost DP over capped run-lengths, a separate worker on a suffix DP used purely for the
+lexicographic reconstruction. \\
+\addlinespace
+Kimi-K3 \newline (128k, off) & 3687 & Over-counted the longest unique-value path (9 and 3 where the
+answers were 6 and 2), never shrinking its window on a repeated value. & The brainstorm wrote the
+reduction into \texttt{notes.md} first --- longest substring without repeating characters along each
+root-to-leaf path, window start via last-seen depths, $O(n)$ DFS --- and only then did a worker
+implement it. \\
+\addlinespace
+GPT-5.6-Terra \newline (on) & 3688 & 4,615 characters implementing a Segment-Tree-Beats-shaped
+structure indexed by candidate value, and wrong. & The plan named the difficulty in advance --- the
+state must be compressed rather than maintaining all distinct values per index --- and nine calls
+later the manager arm returned 1,860 characters over one standard segment tree. The contribution is
+\emph{subtraction}. Manager-only win in four of five passes. \\
+\addlinespace
+GPT-5.6-Luna \newline (on) & abc397\_e & Carried a \emph{set} of unfinished path lengths per subtree
+across 4,092 characters, a general state it never closed. & The brainstorm established the bounding
+lemma (at most two unfinished paths at any vertex), after which a worker implemented the postorder
+scan directly in 2,166 characters over five calls. Manager-only win in two of five passes. \\
+\addlinespace
+Qwen3.8-27B \newline (on) & abc397\_g & Spent all 250,000 tokens on edge-case self-interrogation and
+never emitted a program --- the runaway-reasoning failure mode of Section~\ref{sec:discussion} in
+pure form --- though the reasoning had already reached the min-cut formulation. & Committed that
+same reduction to \texttt{plan.md} as a plan, then had a worker implement it: five calls, 3,548
+characters, manager-only win in all five passes. The scaffold does not supply the insight; it forces
+it onto disk before the budget runs out. \\
+\addlinespace
+Opus-5 \newline (on) & abc388\_e & The feasibility test over-counted, reporting 225 pairs where 220
+is optimal. & Recorded the \emph{justification} in \texttt{notes.md} first --- an exchange argument,
+plus monotonicity of feasibility in $K$ licensing a binary search --- then had one worker implement
+it and a second harden it. A genuine correction, not truncation relief. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\input{fig-scale-bars}
+
+\input{fig-128k-reason-on-scale}
+
+\input{fig-16k-reason-off-scale}
+
+\input{fig-128k-reason-off-scale}
+
+\end{document}

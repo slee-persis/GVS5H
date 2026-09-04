@@ -7,6 +7,15 @@
 # Graded results/ and agent workspace artifacts under ws/ are tracked.
 transcript.jsonl
 
+# Local spec checker: measures the built figures and manuscript against the
+# Nature figure/formatting guides. A working tool, not part of the paper.
+paper_plot_script/check_nature_specs.py
+
+# ICLR 2027 style files, kept locally as the formatting reference. Upstream
+# template, not our work.
+iclr-2027-style-files.zip
+iclr2027/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -28,3 +37,7 @@ venv/
 
 # OS
 .DS_Store
+
+# Agents
+CLAUDE.md
+AGENTS.md
