@@ -18,13 +18,12 @@
 \usepackage[hidelinks]{hyperref}
 
 \newif\iffinalversion
-\finalversionfalse
+\finalversiontrue
+\newif\ifcameraready
+\camerareadyfalse
 \iffinalversion\iclrfinalcopy\fi
 
 \newcommand{\plotdir}{plots}
-% The height cap is a backstop, not a size: it has to stay ABOVE the tallest panel's own
-% height or keepaspectratio scales that figure down to meet it and takes its type with it.
-% The tallest are the two \halfplot charts at 0.86 aspect -- 0.526\textheight each.
 \newcommand{\panelplot}[1]{%
   \includegraphics[width=\linewidth,height=0.55\textheight,keepaspectratio]{#1}}
 \let\halfplot\panelplot
@@ -47,6 +46,7 @@ Improves Coding in Language Models}
 \begin{document}
 
 \maketitle
+\ifcameraready\else\lhead{Under review as a conference paper at ICLR 2027}\fi
 
 \begin{abstract}
 Frontier coding performance is typically bought with larger proprietary models at high
@@ -557,7 +557,7 @@ transcripts --- are provided as anonymized supplementary material, and will be r
 on acceptance.
 \fi
 
-\iffinalversion
+\ifcameraready
 \subsubsection*{Author contributions}
 
 \textbf{[To be completed before the camera-ready.]} For example: V.G., V.K. and A.K.\ conceived
