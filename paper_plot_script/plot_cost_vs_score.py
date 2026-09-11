@@ -1,29 +1,5 @@
 #!/usr/bin/env python3
-"""Cost against accuracy: all seven pinned-backend arms on one axis, LCB-100 x 5 passes, 128k.
-
-One point per arm -- four single calls and the three manager arms that exist -- so the
-question the other two charts answer separately (what does the scaffold buy, what does it
-cost) can be read as a single trade-off. x is dollars for one pass over the 100 problems,
-log scale: the arms span two orders of magnitude and on a linear axis six of them pile up
-against the left edge. A line joins each model's two arms, so the scaffold reads as a
-move through the plane rather than as two unrelated dots.
-
-QWEN3.8-27B IS THE 128k ARM ON BOTH AXES. Its single call was generated at 250k, and the
-rest of the paper reports it cap-matched back to 128k (S3.2). Taking the 128k score with
-the 250k bill would price a run that was never scored, and would put the point a third of
-the way across the axis from where the scored generations sit -- so the output tokens are
-capped at 128,000 per call to match, which moves that arm $29.08 -> $20.44 a pass.
-
-Rates match plot_cost_5_pass's, and its caveats apply here unchanged: they are list prices,
-no cached-input discount, and the Qwen figure is what those tokens would have cost rented
-rather than what our own hardware cost to run. They are declared in ARMS below rather than
-imported, because that chart covers whichever arms its own comparison needs while this one
-is defined by covering all seven.
-
-    uv run --with matplotlib --with numpy --with scipy python paper_plot_script/plot_cost_vs_score.py
-
-Writes paper/plots/<title-slug>_light.pdf.
-"""
+"""Cost against accuracy: all seven pinned-backend arms on one axis, LCB-100 x 5 passes, 128k."""
 import json
 import os
 
@@ -39,26 +15,15 @@ from plot_16k_reason_off_5_pass import (
     DOT, EDGE_LW, FIGSIZE, FS_BODY, FS_NOTE, FS_TITLE, MARGINS, PLOTS, THEMES,
     apply_theme, below_panel, pass_ci, ring, slug, wrap_title, write_figure,
 )
-from plot_cost_5_pass import SOURCES, TOKENS      # noqa: F401 -- SOURCES is read by
-# make_figures_tex.py off this module, so it has to be an attribute of it. Same sheets as
-# the cost chart, which is the point of importing rather than restating them.
+from plot_cost_5_pass import SOURCES, TOKENS
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)   # repo root, one level up from paper_plot_script/
+ROOT = os.path.dirname(HERE)
 R4 = f"{ROOT}/runs/4models-1pass-reason-on/results"
 RF = f"{ROOT}/runs/fable5-5pass-single/results"
 PASSES = [1, 2, 3, 4, 5]
 CAP = 128_000
 
-# key -> (label, results pattern, (input rate, output rate) per MTok, model, arm).
-#
-# Declared here rather than imported from plot_cost_5_pass: that chart is free to narrow to
-# whichever arms its own comparison needs, and this one is defined by covering ALL of them.
-# Importing its ARMS coupled the two, and the single-call rows vanishing from this scatter
-# is not a failure it would have reported -- it would just have drawn four points.
-#
-# The Qwen single row is the 128k cap-matched replay, not the 250k generation it was cut
-# from; see the module docstring on why both axes have to move together.
 ARMS = {
     "q38_single":   ("Qwen3.8-27B, single call",    f"{R4}/q38_single_p%d.cap128k.regraded.json",  (0.35, 2.75), "q38", "single"),
     "q38_multi":    ("Qwen3.8-27B, with manager",   f"{R4}/q38_multiagent_p%d.regraded.json",      (0.35, 2.75), "q38", "manager"),
@@ -78,11 +43,8 @@ TITLE = ("What accuracy costs — LCB-100, 5 passes, 128k max tokens, reasoning 
 CAPTION = ("\\textbf{Cost against accuracy.} One point per arm; an arrow runs from the "
            "single call to the manager of each model that has both.")
 
-# Legend under the axes, so the plane gets the whole text width: seven points spread over
-# two decades of x, and a quarter of the canvas spent on a four-line legend was the widest
-# thing on it. `bottom` holds the x label and the legend row below it.
 SCATTER_MARGINS = dict(MARGINS, right=0.985, bottom=0.245)
-LEGEND_Y = 0.115        # top of the legend row, clear of the x-axis label
+LEGEND_Y = 0.115
 
 
 def notes(pts):
@@ -112,12 +74,9 @@ def compute():
     tok = json.load(open(TOKENS))
     pts = []
     for key, (label, pattern, (ri, ro), mk, arm) in ARMS.items():
-        a = np.array(tok[key]["tokens"], float)      # [pass, problem, 4]: in, out, disc_in, disc_out
+        a = np.array(tok[key]["tokens"], float)
         capped = key == "q38_single"
         if capped:
-            # Cap every generated attempt, not just the graded one: a retry that ran to
-            # 250k would equally have stopped at 128k. Discarded output is 2.4% of this
-            # arm's total, so the choice moves the point by cents either way.
             a = a.copy()
             a[:, :, 1] = np.minimum(a[:, :, 1], CAP)
             a[:, :, 3] = np.minimum(a[:, :, 3], CAP)
@@ -149,7 +108,7 @@ def draw(pts, theme="light", save=None):
                   fontsize=FS_BODY, color=t["ink2"])
     ax.set_ylabel("Accuracy (pass@1, %)", fontsize=FS_BODY, color=t["ink2"])
     ax.set(xlim=(0.25, 190), ylim=(55, 100))
-    ax.grid(False)  # no background gridlines; every point's value is on the chart already
+    ax.grid(False)
     ax.set_axisbelow(True)
     ax.tick_params(length=0, labelsize=FS_BODY)
     ax.set_xticks([0.5, 1, 2, 5, 10, 20, 50, 100],
@@ -159,7 +118,6 @@ def draw(pts, theme="light", save=None):
         ax.spines[spine].set_color(t["axis"])
 
     by = {p["key"]: p for p in pts}
-    # the scaffold as a move through the plane: single -> manager, same model
     for mk in ("q38", "luna", "terra"):
         s, m = by[f"{mk}_single"], by[f"{mk}_multi"]
         ax.annotate("", xy=(m["cost"], m["acc"]), xytext=(s["cost"], s["acc"]),
@@ -174,17 +132,9 @@ def draw(pts, theme="light", save=None):
                 alpha=0.8, zorder=3)
         ax.plot([p["cost"]] * 2, [p["acc_ci"][0], p["acc_ci"][1]], color=edge, lw=1.2,
                 alpha=0.8, zorder=3)
-        # Marker SHAPE is the model, the same job hatch does on the bar charts: a
-        # 6.9pt disc is too small to hatch, and this is the one figure with no
-        # positional fallback -- x is price, y is accuracy, so neither axis names a
-        # model and colour alone would leave grayscale readers with seven identical dots.
         ax.scatter([p["cost"]], [p["acc"]], s=DOT, color=fill, zorder=5,
                    marker=palette.MARKER[palette.SLOT[p["model"]]],
                    edgecolor=edge, linewidth=EDGE_LW)
-        # Label above the point for managers, below for singles: the two arms of a model
-        # sit on the same short arrow and their labels would otherwise overlap. Fable-5 is
-        # the exception -- it lands a point above and a little right of Qwen's manager arm,
-        # so a label below it prints straight through that marker; it goes to the right.
         if p["key"] == "fable_single":
             off, ha = (16, -4), "left"
         else:
@@ -197,8 +147,6 @@ def draw(pts, theme="light", save=None):
     for mk in ("q38", "luna", "terra", "fable"):
         light, dark = FILLS[mk]
         cols = (light,) if mk == "fable" else (light, dark)
-        # the legend swatch takes the model's own marker, so the key is readable in
-        # grayscale too -- an all-circle legend would name the models by hue alone
         pairs.append(tuple(
             Line2D([], [], marker=palette.MARKER[palette.SLOT[mk]], ls="", ms=12,
                    color=c, markeredgecolor=ring(c, theme),
@@ -221,7 +169,7 @@ def main():
     for p in sorted(pts, key=lambda p: p["cost"]):
         print(f"{p['label']:32} {p['cost']:9.2f} {p['acc']:8.1f}  {p['cost']/p['acc']:9.3f}")
     os.makedirs(PLOTS, exist_ok=True)
-    for theme in ("light",):  # no dark twin -- the paper only \inputs light
+    for theme in ("light",):
         draw(pts, theme, save=os.path.join(PLOTS, f"{slug(TITLE)}_{theme}.pdf"))
 
 

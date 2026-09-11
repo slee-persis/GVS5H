@@ -1,24 +1,7 @@
-"""Multi-agent collaborative solver: a primary "manager" plus worker subagents,
-coordinating over a SHARED FILESYSTEM WORKSPACE. Emulates the Claude-Code
-orchestrator/subagent pattern, but every role is the SAME model
-(default groq:qwen/qwen3.6-27b) invoked in a fresh context.
+"""
+Multi-agent collaborative solver: a primary manager plus worker subagents, coordinating over a shared workspace.
 
-Control flow (as requested):
-  1. PRIMARY writes an overarching plan and seeds the task list.
-  2. The FIRST WORKER just thinks about the problem and proposes approaches.
-  3. Loop: PRIMARY decides which task to prioritize and spawns a worker; the
-     worker completes it, updates the shared code/proof, and proposes next steps.
-     Primary stops when it judges the problem solved (or the iteration budget
-     runs out).
-  4. A FINALIZE worker emits the definitive artifact, which is then graded.
-
-Shared workspace (real files, so every role sees the same evolving state):
-    <ws>/task.md      the problem statement
-    <ws>/plan.md      the primary's overarching plan
-    <ws>/tasks.json   the task list [{id, desc, status, result}]
-    <ws>/notes.md     accumulated ideas / proofs / findings
-    <ws>/solution.py  current best code   (code problems)
-    <ws>/answer.md    current best answer  (math problems)
+Every role is the same model invoked in a fresh context.
 """
 
 import os
@@ -27,12 +10,13 @@ import time
 import json
 import hashlib
 
-from orchestrator import chat  # groq:/ollama dispatch
+from orchestrator import chat
 
 MODEL = os.environ.get("MULTIAGENT_MODEL", "groq:qwen/qwen3.6-27b")
-MAX_ITERS = int(os.environ.get("MULTIAGENT_MAX_ITERS", "4"))   # primary->worker cycles
+MAX_ITERS = int(os.environ.get("MULTIAGENT_MAX_ITERS", "4"))
 MAX_TASKS = int(os.environ.get("MULTIAGENT_MAX_TASKS", "12"))  # cap on live task list
-WS_ROOT = os.environ.get("MULTIAGENT_WS", os.path.join(os.path.dirname(os.path.abspath(__file__)), "ws"))
+WS_ROOT = os.environ.get("MULTIAGENT_WS", os.path.abspath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "runs", "ws")))
 
 
 # --- workspace helpers -----------------------------------------------------
@@ -57,17 +41,13 @@ def _append(ws, name, content):
 
 
 # --- transcript logging ----------------------------------------------------
-# Every agent call for a problem is appended to <ws>/transcript.jsonl: the first
-# line is a _meta record, then one record per call {role, request, response}.
-
+# every agent call for a problem is appended to <ws>/transcript.jsonl
 def _record(ws, rec):
     with open(os.path.join(ws, "transcript.jsonl"), "a") as f:
         f.write(json.dumps(rec) + "\n")
 
 
 def _chat(ws, role, messages, temperature, meta=None):
-    """Model call that also transcripts the full request/response for this problem.
-    If `meta` is passed it is populated with {finish_reason, completion_tokens}."""
     m = meta if meta is not None else {}
     resp = chat(MODEL, messages, temperature=temperature, meta=m)
     _record(ws, {"t": time.time(), "role": role, "request": messages, "response": resp,
@@ -82,7 +62,6 @@ def _strip_think(text):
 
 
 def _sections(text):
-    """Split a model reply into {HEADER: body}. Accepts '### H', '**H**', 'H:'."""
     out, cur, buf = {}, None, []
     for line in _strip_think(text).splitlines():
         s = line.strip()
@@ -115,7 +94,6 @@ def _extract_py(text):
 
 
 def _parse_tasks(text):
-    """Parse the primary's curated list: lines like '- [done] ...' / '- [todo] ...'."""
     out = []
     for b in _bullets(text):
         m = re.match(r"\[\s*([a-z_ ]+?)\s*\]\s*(.*)", b, re.I)
@@ -130,8 +108,7 @@ def _parse_tasks(text):
     return out[:MAX_TASKS]
 
 
-ANS_RE = re.compile(r"ANSWER:\s*\S", re.I)  # any non-empty final answer (int or expression)
-# A genuine final answer is short. Anything longer is a reasoning dump, not an answer.
+ANS_RE = re.compile(r"ANSWER:\s*\S", re.I)
 MAX_ANSWER_CHARS = 20000
 
 
@@ -182,8 +159,6 @@ def _primary_plan(problem, spec, ws, log):
 
 
 def _ideation_worker(problem, spec, ws, log):
-    """First worker: think about the problem and PROPOSE approaches (returns a list).
-    Its proposals are folded into the task list by the primary, not appended blindly."""
     sys = (
         "You are the FIRST WORKER. Do NOT solve the problem yet. Just think about it: "
         "identify the core difficulty, list candidate approaches, and note pitfalls. "
@@ -202,13 +177,6 @@ def _ideation_worker(problem, spec, ws, log):
 
 
 def _primary_manage(problem, spec, ws, tasks, proposals, last_summary, log):
-    """Primary monitors progress, curates the task list, and decides done/next.
-
-    Reviews the current solution + the latest worker's result, then rewrites the task
-    list (merge duplicates, mark done, fold in only genuinely new proposals) and either
-    declares the problem solved or names the single next task.
-    Returns (status, next_desc, curated_tasks).
-    """
     kind = spec["kind"]
     cur = _read(ws, "solution.py" if kind == "code" else "answer.md").strip()
     task_lines = "\n".join(
@@ -292,13 +260,7 @@ def _worker(problem, spec, ws, task, log, finalize=False):
     else:
         ans = sec.get("ANSWER", "").strip()
         if not ans and ANS_RE.search(reply) and len(reply) < MAX_ANSWER_CHARS:
-            # No '### ANSWER' header, but a short reply that does state a final answer.
             ans = _strip_think(reply).strip()
-        # A reply with neither the section nor a short final answer is a failed or truncated
-        # call. Writing its raw text here is what let a 100k-char reasoning dump become the
-        # workspace's "current answer", which the manager could never make progress against.
-        # Only overwrite if this response has a parseable final answer (or there is
-        # nothing yet): a rambling/truncated call must not destroy a good prior answer.
         if ans and (ANS_RE.search(ans) or not _read(ws, "answer.md").strip()):
             _write(ws, "answer.md", ans)
     if sec.get("NOTES"):
@@ -313,32 +275,23 @@ def _worker(problem, spec, ws, task, log, finalize=False):
 # --- public entry point ----------------------------------------------------
 
 def multiagent_solve(problem_text, spec, log=None, status_out=None):
-    """Same signature as escalate(): returns final answer text for grading.
-    If `status_out` is passed, it gets the last call's finish_reason plus a count of
-    truncated (finish_reason=length) calls over the whole problem."""
     log = log or (lambda *a, **k: None)
     ws = os.path.join(WS_ROOT, _slug(problem_text))
     os.makedirs(ws, exist_ok=True)
     _write(ws, "task.md", problem_text)
     _write(ws, "notes.md", "")
-    _write(ws, "transcript.jsonl", "")  # fresh transcript per run
+    _write(ws, "transcript.jsonl", "")
     _record(ws, {"_meta": True, "t": time.time(), "model": MODEL,
                  "kind": spec["kind"], "max_iters": MAX_ITERS, "problem": problem_text})
 
     tasks = _primary_plan(problem_text, spec, ws, log)
     proposals = _ideation_worker(problem_text, spec, ws, log)
-    # Primary folds the plan + ideation into one curated list and picks the first task.
     status, next_desc, tasks = _primary_manage(
         problem_text, spec, ws, tasks, proposals, "ideation complete", log)
     _save_tasks(ws, tasks)
 
-    # Primary manages the loop: worker does the chosen task, then the primary reviews
-    # progress, re-curates the list, and decides whether the problem is done.
     iters, prev_desc = 0, None
     while status == "continue" and next_desc and iters < MAX_ITERS:
-        # No-progress guard: if the manager hands back the very same task it just assigned,
-        # the worker achieved nothing and another identical cycle will too. Each cycle can
-        # cost a full CLOUD_MAX_TOKENS generation, so stop rather than spend the budget.
         if prev_desc is not None and next_desc.strip().lower() == prev_desc.strip().lower():
             log(f"    [primary] reissued the same task; no progress, stopping after {iters} iters")
             break
@@ -350,15 +303,12 @@ def multiagent_solve(problem_text, spec, log=None, status_out=None):
             problem_text, spec, ws, tasks, nexts, summary, log)
         _save_tasks(ws, tasks)
 
-    # Finalize only if the primary didn't already sign off on a usable answer (a redundant
-    # finalize can ramble past the token cap and destroy a correct intermediate answer).
     if status == "done" and _has_answer(ws, spec):
         log("    [finalize] skipped (primary marked done)")
     else:
         _worker(problem_text, spec, ws, {"id": 0, "desc": "finalize"}, log, finalize=True)
 
     if status_out is not None:
-        # summarize call outcomes across the whole problem from the transcript
         recs = []
         for ln in open(os.path.join(ws, "transcript.jsonl")):
             r = json.loads(ln)
@@ -375,9 +325,6 @@ def multiagent_solve(problem_text, spec, log=None, status_out=None):
 
 
 def single_solve(problem_text, spec, log=None, status_out=None):
-    """Single-shot baseline: one model call, no orchestration. Same signature as
-    escalate()/multiagent_solve(); transcripts each problem like the multi-agent path.
-    If `status_out` (a dict) is passed, it gets {finish_reason, completion_tokens} of the call."""
     log = log or (lambda *a, **k: None)
     ws = os.path.join(WS_ROOT, _slug(problem_text))
     os.makedirs(ws, exist_ok=True)

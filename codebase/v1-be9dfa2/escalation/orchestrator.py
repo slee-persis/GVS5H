@@ -1,16 +1,4 @@
-"""Hierarchical multi-model escalation over local ollama.
-
-Configuration (as requested):
-  - A ladder of qwen3.5 models ordered by size/capability.
-  - For each problem: the SMALLEST model solves, then a second instance of the
-    same model critiques. Solver and critic pass the answer back and forth until
-    the critic is satisfied (APPROVED) or a per-layer round cap is hit.
-  - The satisfied answer is then handed UP to the next (larger) layer as a
-    reference candidate, which runs the same solve<->critique loop to improve it.
-  - The top layer's approved answer is the final output.
-
-Talks to ollama's /api/chat directly (no extra deps; stdlib urllib only).
-"""
+"""Hierarchical multi-model escalation"""
 
 import os
 import sys
@@ -22,36 +10,23 @@ import urllib.error
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 
-# Cloud passthrough: a ladder entry like "groq:openai/gpt-oss-120b" routes to
-# Groq's OpenAI-compatible endpoint instead of local ollama. Any provider with
-# an OpenAI-compatible /v1/chat/completions works via ESCALATION_OPENAI_BASE.
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-# Disable hidden reasoning by default: the free-tier token/min limit is tiny and
-# qwen3.6's <think> blocks burn ~10x the tokens. "none" or "default".
 GROQ_REASONING = os.environ.get("ESCALATION_GROQ_REASONING", "none")
 
-# OpenRouter: a ladder/model entry like "openrouter:qwen/qwen3-30b-a3b" routes here.
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-# "none" -> ask OpenRouter to disable reasoning; "" -> leave to model default.
 OPENROUTER_REASONING = os.environ.get("ESCALATION_OR_REASONING", "none")
 
-# Size-ordered ladder (small -> large). Names resolved against `ollama list`.
 LADDER = os.environ.get(
     "ESCALATION_LADDER",
     "qwen3.5:2b,qwen3.5:9b,qwen3.5:35b,qwen3.5:122b",
 ).split(",")
 
-MAX_ROUNDS = int(os.environ.get("ESCALATION_MAX_ROUNDS", "2"))  # solver<->critic rounds per layer
-THINK = os.environ.get("ESCALATION_THINK", "0") == "1"          # enable model "thinking" (slower)
+MAX_ROUNDS = int(os.environ.get("ESCALATION_MAX_ROUNDS", "2"))
+THINK = os.environ.get("ESCALATION_THINK", "0") == "1"
 REQUEST_TIMEOUT = int(os.environ.get("ESCALATION_TIMEOUT", "1200"))
-# Cloud calls should be fast; a hung provider must abort quickly and let retry
-# re-route to a different provider rather than blocking on the 20-min local cap.
-# This is a HARD wall-clock cap (a socket timeout alone doesn't bound total time:
-# some providers trickle bytes slowly, keeping the read alive for minutes).
 CLOUD_TIMEOUT = int(os.environ.get("ESCALATION_CLOUD_TIMEOUT", "120"))
-# Cap generation length so no single call can run away (0 = unset).
 CLOUD_MAX_TOKENS = int(os.environ.get("ESCALATION_CLOUD_MAX_TOKENS", "8000"))
 
 
@@ -75,7 +50,7 @@ def ollama_chat(model, messages, temperature=0.2, num_ctx=16384, meta=None):
                 meta["finish_reason"] = out.get("done_reason")
                 meta["completion_tokens"] = out.get("eval_count")
             return out["message"]["content"]
-        except Exception as e:  # noqa: BLE001 - ollama can drop/reload; retry
+        except Exception as e:
             if attempt == 2:
                 raise
             time.sleep(3 * (attempt + 1))
@@ -83,12 +58,6 @@ def ollama_chat(model, messages, temperature=0.2, num_ctx=16384, meta=None):
 
 
 def openai_chat(url, api_key, model, messages, temperature=0.2, extra=None, meta=None):
-    """Call an OpenAI-compatible /v1/chat/completions endpoint (e.g. Groq, OpenRouter).
-
-    Each attempt has a HARD wall-clock cap: a watchdog abandons a provider that
-    stalls (some trickle bytes slowly and evade the socket timeout) so the retry
-    re-routes to a different, faster provider.
-    """
     body = {"model": model, "messages": messages, "stream": False, "temperature": temperature}
     if CLOUD_MAX_TOKENS > 0:
         body["max_tokens"] = CLOUD_MAX_TOKENS
@@ -98,7 +67,6 @@ def openai_chat(url, api_key, model, messages, temperature=0.2, extra=None, meta
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {api_key}",
-        # Groq/Cloudflare returns 403 for urllib's default UA; set an explicit one.
         "User-Agent": "model-test/1.0",
     }
 
@@ -107,7 +75,7 @@ def openai_chat(url, api_key, model, messages, temperature=0.2, extra=None, meta
             req = urllib.request.Request(url, data=data, headers=headers)
             with urllib.request.urlopen(req, timeout=CLOUD_TIMEOUT) as r:
                 box["out"] = json.loads(r.read())
-        except Exception as e:  # noqa: BLE001 - captured for the caller to classify
+        except Exception as e:
             box["err"] = e
 
     for attempt in range(6):
@@ -115,7 +83,7 @@ def openai_chat(url, api_key, model, messages, temperature=0.2, extra=None, meta
         th = threading.Thread(target=_do, args=(box,), daemon=True)
         th.start()
         th.join(CLOUD_TIMEOUT + 5)
-        if th.is_alive():  # hard cap: abandon the stalled provider (daemon thread leaks, dies later)
+        if th.is_alive():
             if attempt == 5:
                 raise TimeoutError(f"cloud call exceeded {CLOUD_TIMEOUT}s on every attempt")
             print(f"    [cloud] hard timeout >{CLOUD_TIMEOUT}s, abandoning provider (attempt {attempt + 1})", file=sys.stderr, flush=True)
@@ -125,25 +93,13 @@ def openai_chat(url, api_key, model, messages, temperature=0.2, extra=None, meta
             msg = choice["message"]
             finish = choice.get("finish_reason")
             content = msg.get("content") or ""
-            # Some hybrid-reasoning models return content=null with text under "reasoning".
-            # Trust that fallback ONLY on a clean stop: a call truncated mid-thought
-            # (finish_reason=length) has produced no answer, and handing its raw reasoning
-            # back as the reply poisons the multi-agent workspace -- the manager then reads
-            # 100k chars of stream-of-consciousness as the "current answer" and reissues the
-            # same task until MAX_ITERS runs out.
             if not content and finish == "stop":
                 content = msg.get("reasoning") or ""
             if finish and finish != "stop":
-                # Diagnostic. An abnormal stop -- usually 'length', i.e. hit
-                # CLOUD_MAX_TOKENS mid-generation -- leaves an unclosed ```python fence,
-                # and extract_code then reads the whole attempt as empty. Log it so a
-                # run's empty-code rate is attributable instead of silent.
                 ntok = (box["out"].get("usage") or {}).get("completion_tokens")
                 print(f"    [cloud] finish_reason={finish} ({len(content)} chars, "
                       f"{ntok} completion tokens)", file=sys.stderr, flush=True)
                 if not content:
-                    # Deliberately NOT retried: the cause is the token budget, not a
-                    # transient fault, so an identical retry just burns the cap again.
                     print("    [cloud] truncated before any content; discarding reasoning-only reply",
                           file=sys.stderr, flush=True)
             if meta is not None:
@@ -168,11 +124,6 @@ def openai_chat(url, api_key, model, messages, temperature=0.2, extra=None, meta
 
 
 def chat(model, messages, temperature=0.2, num_ctx=16384, meta=None):
-    """Dispatch to a cloud provider for prefixed models, else local ollama.
-
-    If `meta` (a dict) is passed, it is populated with {finish_reason, completion_tokens}
-    from the underlying call, so callers can classify truncated/empty_stop outcomes.
-    """
     if model.startswith("groq:"):
         if not GROQ_API_KEY:
             raise RuntimeError("GROQ_API_KEY not set but ladder uses a groq: model")
@@ -181,12 +132,11 @@ def chat(model, messages, temperature=0.2, num_ctx=16384, meta=None):
     if model.startswith("openrouter:"):
         if not OPENROUTER_API_KEY:
             raise RuntimeError("OPENROUTER_API_KEY not set but model uses an openrouter: prefix")
-        extra = {"provider": {"sort": "throughput"}}  # prefer fast providers, avoid stalls
+        extra = {"provider": {"sort": "throughput"}}
         if OPENROUTER_REASONING == "none":
             extra["reasoning"] = {"enabled": False}
         elif OPENROUTER_REASONING in ("low", "medium", "high"):
             extra["reasoning"] = {"effort": OPENROUTER_REASONING}
-        # any other value (e.g. "default") -> send nothing; model reasons at its default
         return openai_chat(OPENROUTER_URL, OPENROUTER_API_KEY, model[len("openrouter:"):], messages, temperature, extra, meta)
     return ollama_chat(model, messages, temperature=temperature, num_ctx=num_ctx, meta=meta)
 
@@ -259,8 +209,6 @@ GPQA_SPEC = {
 
 HLE_SPEC = {
     "kind": "math",
-    # 'ANSWER:' rather than upstream HLE's 'Exact Answer:' -- multiagent.py's ANS_RE gates
-    # whether a worker may overwrite answer.md, so keep this repo's existing convention.
     "solver_system": (
         "You are answering a question from Humanity's Last Exam: an extremely difficult, "
         "expert-level question that may come from any academic discipline. It may be "
@@ -334,9 +282,7 @@ def solve_layer(model, problem_text, spec, prior_answer=None, temperature=0.2, l
 
 
 def escalate(problem_text, spec, ladder=None, log=None, status_out=None):
-    """Run the full ladder small->large, threading each layer's answer upward.
-    `status_out` is accepted for a uniform SOLVE() signature (populated with the top
-    layer's finish_reason)."""
+    """Run the full ladder small->large, threading each layer's answer upward."""
     log = log or (lambda *a, **k: None)
     ladder = ladder or LADDER
     prior = None

@@ -1,78 +1,33 @@
-"""The one model palette. Every chart imports this; no script defines its own.
-
-There used to be five FILLS dicts across these scripts, two of them hand-copied
-under a comment calling itself "the shared model palette". They had drifted:
-#a8cdf0 meant GPT-5.6-Luna in the pinned-backend figures and MiniMax-M3 in the
-scale figures, and #a8d878 meant GPT-5.6-Terra in one and Kimi-K3 in the other.
-A reader flipping between Figure 1 and Figure 4 saw one colour name two models.
-
-Three channels, and the model rides two of them:
-
-    fill lightness -> ARM      light = single call, dark = with manager
-    hue            -> MODEL    for colour readers
-    hatch / marker -> MODEL    again, so identity survives grayscale and CVD
-
-The old palette spent lightness on BOTH arm and model, giving each model's dark
-fill its own level. That cannot work: separating 4 models x 2 arms needs 8
-distinguishable greys, at which point "light = single, dark = manager" stops
-reading as a pair relationship -- and the captions all state that convention.
-The worst pairs came out 0.2-0.7 L* apart, i.e. the same grey. So lightness now
-carries the arm alone, at ONE level per arm 47 L* apart, and the texture channel
-carries the model. That is why the hatch is load-bearing rather than decorative:
-deuteranopia dE between manager fills bottoms out at 10.4 (Qwen3.5-9B vs
-MiniMax-M3, Figures 4 and 6), which is only legal WITH a secondary encoding.
-Drop the hatch and that pair stops being distinguishable -- see main() below,
-which measures every gate.
-
-Hues are the dataviz reference palette's categorical order, plus a cyan for
-Opus-5, stepped to a fixed L* per arm with an absolute Lab chroma cap so nothing
-prints neon. Qwen3.5-9B and Opus-5 share texture slot 4: they never appear in
-the same figure, and they carry different hues anyway.
-
-    uv run --with matplotlib python paper_plot_script/palette.py            # gates
-    uv run --with matplotlib python paper_plot_script/palette.py --swatches # sheet
-"""
+"""The one model palette. Every chart imports this; no script defines its own."""
 import itertools
 import math
 import os
 
-# key -> (single call, with manager). Same shape the old per-script FILLS had,
-# so importing this is a one-line change at each call site.
 FILLS = {
-    "q38":   ("#d1dcff", "#005fb6"),   # Qwen3.8-27B     blue
-    "terra": ("#ffd3c1", "#a23f17"),   # GPT-5.6-Terra   orange
-    "luna":  ("#a7ebc9", "#006c48"),   # GPT-5.6-Luna    aqua
-    "fable": ("#ffd2cc", "#ad3132"),   # Claude Fable 5  red
-    "q35":   ("#ffd0df", "#ad2666"),   # Qwen3.6-35B     magenta
-    "mm3":   ("#c1e7b4", "#1b6d12"),   # MiniMax-M3      green
-    "kimi":  ("#e4d6ff", "#624fae"),   # Kimi-K3         violet
-    "q9":    ("#fed6a6", "#815600"),   # Qwen3.5-9B      yellow
-    "opus":  ("#8aebfe", "#006877"),   # Opus-5          cyan
+    "q38":   ("#d1dcff", "#005fb6"),
+    "terra": ("#ffd3c1", "#a23f17"),
+    "luna":  ("#a7ebc9", "#006c48"),
+    "fable": ("#ffd2cc", "#ad3132"),
+    "q35":   ("#ffd0df", "#ad2666"),
+    "mm3":   ("#c1e7b4", "#1b6d12"),
+    "kimi":  ("#e4d6ff", "#624fae"),
+    "q9":    ("#fed6a6", "#815600"),
+    "opus":  ("#8aebfe", "#006877"),
 }
 
-# The texture slot. Fixed per model, so a model's hatch is the same in every
-# figure it appears in. Only 4 slots are needed: no figure shows more than four
-# models. q9 and opus share slot 4 (disjoint figures).
 SLOT = {"q38": 1, "terra": 2, "luna": 3, "fable": 4,
         "q35": 1, "mm3": 2, "kimi": 3, "q9": 4, "opus": 4}
 
-# Slot 1 is deliberately untextured: one clean fill per figure keeps the others
-# reading as texture rather than as noise. Density is "medium" -- at the sparse
-# setting a 0.38-high bar shows only two or three strokes, at dense the
-# cross-hatch fills in and stops being distinguishable from solid.
 HATCH = {1: "", 2: "//", 3: "..", 4: "xx"}
-MARKER = {1: "o", 2: "s", 3: "^", 4: "D"}      # scatters: hatch is invisible on a 6.9pt disc
+MARKER = {1: "o", 2: "s", 3: "^", 4: "D"}
 
-HATCH_LW = 0.40     # printed points; multiply by the script's PAGE_SCALE
-SURFACE = "#ffffff"  # hatch ink on a dark fill
+HATCH_LW = 0.40
+SURFACE = "#ffffff"
 
 LABELS = {"q38": "Qwen3.8-27B", "terra": "GPT-5.6-Terra", "luna": "GPT-5.6-Luna",
           "fable": "Claude Fable 5", "q35": "Qwen3.6-35B", "mm3": "MiniMax-M3",
           "kimi": "Kimi-K3", "q9": "Qwen3.5-9B", "opus": "Opus-5"}
 
-# The model sets that actually share a figure. The gates below are checked
-# within each set, not across all nine -- two models that never co-occur do not
-# have to be told apart.
 SETS = {
     "pinned  (Fig 1, 2, 3)": ["q38", "terra", "luna", "fable"],
     "scale off (Fig 4, 6)":  ["q9", "q35", "mm3", "kimi"],
@@ -81,19 +36,6 @@ SETS = {
 
 
 def bar_kw(key, arm, surface=SURFACE):
-    """Fill + texture for one bar. `arm` is "single" or "manager".
-
-    The hatch inverts on the dark fill -- surface-coloured lines on the manager
-    bar, the model's own dark on the pale single bar. Without the inversion the
-    hatch is drawn in the fill's own colour and the manager bars all come out
-    flat, which is the failure this whole channel exists to prevent.
-
-    A Patch's edgecolor sets BOTH its outline and its hatch ink, so a hatched bar
-    cannot also carry ring()'s hairline -- edgecolor is returned only when there
-    IS a hatch, leaving the caller's own ring in place for slot 1. The hatch
-    STROKE width is rcParams["hatch.linewidth"] (set in apply_theme), not the
-    patch's linewidth, which stays the caller's edge width.
-    """
     light, dark = FILLS[key]
     h = HATCH[SLOT[key]]
     kw = {"color": dark if arm == "manager" else light}
@@ -104,7 +46,6 @@ def bar_kw(key, arm, surface=SURFACE):
 
 
 def marker_kw(key, arm):
-    """Fill + shape for one scatter point."""
     light, dark = FILLS[key]
     return {"marker": MARKER[SLOT[key]],
             "color": dark if arm == "manager" else light,
@@ -112,7 +53,6 @@ def marker_kw(key, arm):
 
 
 # --------------------------------------------------------------- colour maths
-# Kept here so the palette verifies itself with no other dependency.
 def _rgb(h):
     h = h.lstrip("#")
     return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
@@ -159,7 +99,6 @@ def delta_e(a, b):
 
 
 def deuter(h):
-    """Brettel-style deuteranope simulation."""
     r, g, b = [_lin(v) * 255 for v in _rgb(h)]
     L = 17.8824 * r + 43.5161 * g + 4.11935 * b
     S = 0.0299566 * r + 0.184309 * g + 1.46709 * b
@@ -171,9 +110,9 @@ def deuter(h):
                   _unlin(max(0, min(1, B / 255)))))
 
 
-ARM_MIN = 3.0       # single vs manager fill of one model; not text, so AA does not bind
-DEUTER_MIN = 8.0    # manager fills within a figure; the WITH-secondary-encoding floor
-ARM_GULF_MIN = 30.0  # L* between the pale band and the dark band
+ARM_MIN = 3.0
+DEUTER_MIN = 8.0
+ARM_GULF_MIN = 30.0
 
 
 def main():
@@ -227,7 +166,6 @@ def main():
 
 
 def swatches(path=None):
-    """Render the palette in colour and grayscale, so a change is inspectable."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt

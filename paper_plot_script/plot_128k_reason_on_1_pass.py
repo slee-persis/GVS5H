@@ -1,19 +1,5 @@
 #!/usr/bin/env python3
-"""Single call vs manager across model scale, LCB-100 at 128k, reasoning ON.
-
-"Single call" is one API call with no tools and no loop -- the raw model, not an agent.
-On disk that arm is still named `*_single.json`, so the code keys stay `single`.
-
-The reasoning-ON twin of plot_128k_reason_off_1_pass.py, over runs/results_think_high.
-1 pass per condition, so only the cross-model Tukey HSD is shown.
-
-Model set differs from the reasoning-OFF run: Qwen3.5-9b was dropped (unusable
-under a reasoning budget) and Opus-5 has both arms here.
-
-    uv run --with matplotlib --with numpy --with scipy python paper_plot_script/plot_128k_reason_on_1_pass.py
-
-Writes paper/plots/<title-slug>_light.pdf.
-"""
+"""Single call vs manager across model scale, LCB-100 at 128k, reasoning ON."""
 import json
 import math
 import os
@@ -32,13 +18,9 @@ from plot_16k_reason_off_5_pass import (
 )
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)             # repo root, one level up from paper_plot_script/
+ROOT = os.path.dirname(HERE)
 RESULTS = os.path.join(ROOT, "runs/results_think_high")
 
-# Opus-5's parameter count is not public. It sits at a placeholder x to the right
-# of Kimi-K3 -- far enough that its block under the axis clears Kimi's -- and is left
-# out of the curves, the same treatment the reference chart used. Set a real value
-# here if one is known.
 OPUS_X = 1.2e13
 
 MODELS = {
@@ -48,30 +30,18 @@ MODELS = {
     "opus": ("Opus-5", OPUS_X),
 }
 
-# Every model keeps the hue it has in the other two charts. Opus is new here: the
-# reference chart's red for it (#a83a35) is indistinguishable from Qwen3.6-35b's
-# brick (#a63f2e) once both are on screen, so it takes magenta instead.
 FILLS = dict(FILLS, opus=("#e8a8c8", "#a8306a"))
 
 TITLE = ("Manager vs single call across model scale "
          "— LCB-100, 1 pass, 128k max tokens, reasoning ON")
 
-# see the note on CAPTION in plot_16k_reason_off_5_pass.py: make_figures_tex.py renders
-# these into the figure's LaTeX caption, where they are set in real \footnotesize. The
-# emit-rate line reads its numbers off `stats`, so it cannot drift from the run.
 CAPTION = "\\textbf{Manager vs. single, reasoning on, 128k, one pass.}"
 
 
 def notes(stats):
-    """Figure 3 is the first of the three model-set charts, so it carries the shared
-    conventions; Figures 4 and 5 refer back to it rather than repeating them."""
     emit = ", ".join(f"{st['label']} {st['ne_single']:.0f}\u2192{st['ne_multi']:.0f}"
                      for st in stats)
     return [
-        # Exactly the sentence make_figures_tex states once for all three panels, so
-        # it is stripped there rather than repeated. What used to follow it described
-        # the size-ordered blocks under the axis of the old vertical chart, which the
-        # compact panels do not draw and no longer order by.
         "Fill: light = single call (one call, no tools), dark = with manager; "
         "\u0394 = manager \u2212 single, in percentage points.",
         "128k max tokens, reasoning on \u2014 effort:high for Kimi-K3 and Opus-5, a 20k "
@@ -85,10 +55,6 @@ def notes(stats):
 # --------------------------------------------------------------------------- data
 
 def load_arm(model, arm):
-    """-> (qids, passed[N], nonempty[N]). One file per config: this run is 1 pass.
-
-    The .regraded.json twin, for the reason in plot_16k_reason_off_5_pass.load_arm.
-    """
     recs = json.load(open(f"{RESULTS}/{model}_{arm}.regraded.json"))["lcb"]["records"]
     return ([r["question_id"] for r in recs],
             np.array([bool(r["passed"]) for r in recs], float),
@@ -121,18 +87,15 @@ def draw(stats, letters, theme="light", save=None):
     ax.set_xscale("log")
     ax.set_xticks([1e11, 1e12], ["100B", "1T"])
     ax.minorticks_off()
-    # x padding is half a value label wide at each end, no more: the models have to sit
-    # as far apart as the axis allows for the per-model blocks below to clear each other
     ax.set(xlim=(2.2e10, 2.2e13), ylim=(0, 112))
     ax.set_ylabel("Accuracy (pass@1, %)", fontsize=FS_BODY, color=t["ink2"])
     ax.xaxis.grid(False)
-    ax.yaxis.grid(False)  # no background gridlines; every mark already carries a printed value label
+    ax.yaxis.grid(False)
     ax.set_axisbelow(True)
     ax.tick_params(length=0, labelsize=FS_BODY)
     for spine in ("left", "bottom"):
         ax.spines[spine].set_color(t["axis"])
 
-    # ---- one curve per condition, through every model including Opus
     from scipy.interpolate import PchipInterpolator
     lx = np.log10([st["params"] for st in stats])
     span = np.linspace(lx.min(), lx.max(), 300)
@@ -143,14 +106,10 @@ def draw(stats, letters, theme="light", save=None):
         ax.plot(10 ** span, PchipInterpolator(lx, ys)(span), ls=style, lw=1.6,
                 color=t["muted"], alpha=0.9, zorder=1)
 
-    # ---- both arms share the model's x, so each pair reads as one vertical stack.
-    # Value labels go above the upper arm and below the lower one: models are 1.3in
-    # apart on the page, and a label beside a dot would run into the next one along.
     for st in stats:
         x = st["params"]
         light, dark = FILLS[st["key"]]
         if st["single"] == st["multi"]:
-            # coincident scores: one split marker, light half single / dark half manager
             ax.plot([x], [st["single"]], marker="o", ls="",
                     markersize=2 * math.sqrt(DOT / math.pi), fillstyle="left",
                     markerfacecolor=light, markerfacecoloralt=dark,
@@ -170,8 +129,6 @@ def draw(stats, letters, theme="light", save=None):
                         textcoords="offset points", ha="center", va=va,
                         fontsize=FS_BODY, color=t["ink"])
 
-    # ---- per-model block under the axis: name, size, delta, Tukey group. Names fit
-    # here: this model set spans 3 decades, so no two sit closer than 1.3in.
     for i, st in enumerate(stats):
         drop = model_block(ax, st["params"], [
             (head_label(st), FS_HEAD, "bold", t["ink"]),
@@ -182,7 +139,6 @@ def draw(stats, letters, theme="light", save=None):
                 xytext=(0, -(drop + 12)), textcoords="offset points",
                 ha="center", va="top", fontsize=FS_BODY, color=t["ink2"])
 
-    # ---- right column: one swatch pair per model, the two condition curves, notes
     pairs, names = [], []
     for st in stats:
         light, dark = FILLS[st["key"]]
@@ -192,8 +148,6 @@ def draw(stats, letters, theme="light", save=None):
             for c in (light, dark)))
         names.append(st["label"])
 
-    # label wraps: see the same block in plot_16k_reason_off_5_pass.py. "35B -> Opus-5"
-    # is the longest span of the three charts and the one that overran the column.
     trend = [Line2D([], [], ls="--", lw=1.6, color=t["muted"],
                     label=f"Single call\n{totals['single']:+.0f} pts\n35B → Opus-5"),
              Line2D([], [], ls="-", lw=1.6, color=t["muted"],
@@ -205,7 +159,6 @@ def draw(stats, letters, theme="light", save=None):
     side_panel(fig, t, pairs, names, trend,
                trend_kw=dict(handletextpad=0.7, handlelength=2.2))
     if save:
-        # no crop: the canvas is authored at exactly PAGE_SCALE x its printed size
         write_figure(fig, save)
     return fig
 
@@ -232,7 +185,7 @@ def main():
                   f"   p {pmat[i][j]:.4g}")
 
     os.makedirs(PLOTS, exist_ok=True)
-    for theme in ("light",):  # no dark twin -- the paper only \inputs light
+    for theme in ("light",):
         draw(stats, letters, theme,
              save=os.path.join(PLOTS, f"{slug(TITLE)}_{theme}.pdf"))
 

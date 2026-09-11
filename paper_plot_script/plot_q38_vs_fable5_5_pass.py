@@ -1,48 +1,5 @@
 #!/usr/bin/env python3
-"""How close do the manager arms get to Fable 5? LCB-100 x 5 passes.
-
-Four conditions, one problem set (escalation/lcb100_hardest_v6.json, same 100 ids in the
-same order), 5 independent passes each, 128k max tokens, reasoning ON everywhere:
-
-    Qwen3.8-27B    with manager   runs/4models-1pass-reason-on/results/q38_multiagent_p{1..5}
-    GPT-5.6-Luna   with manager   runs/4models-1pass-reason-on/results/luna_multiagent_p{1..5}
-    GPT-5.6-Terra  with manager   runs/4models-1pass-reason-on/results/terra_multiagent_p{1..5}
-    Fable-5        single call    runs/fable5-5pass-single/results/fable5_single_p{1..5}
-
-Every bar is a manager arm except the reference, so the scaffold is held fixed and the
-chart asks one question: how much of Fable 5's single call does the manager buy on each
-base model?
-
-NO SINGLE-CALL ARM IS DRAWN except Fable 5's, which is the reference and has no other.
-Qwen3.8-27B's was generated at a 250,000-token output cap against the 128,000 everything
-here ran at -- 150 of its 500 calls ran past 128k and 124 stopped dead on the 250k
-ceiling, so a manager-vs-single Delta drawn against it is partly a comparison of output
-budgets. capmatch_q38.py replays those generations against 128k if the within-model Delta
-is wanted back; *.cap128k.regraded.json holds the result.
-
-WHAT IS STILL NOT MATCHED IS THINKING DEPTH, and it is the live caveat on this figure.
-The cap is the same and the scaffold is the same, but each provider exposes a different
-control over how long the model thinks and none of these four sit on the same setting:
-the Qwen chat template leaves thinking on with no budget requested, bounded only by the
-128k cap; Fable 5 is adaptive-always-on at effort:high; and the two GPT-5.6 arms ran at
-OpenAI's DEFAULT effort, because run_4models_1pass_reason_on.sh never sets
-ESCALATION_OPENAI_REASONING. It shows in the generations -- a manager pass emits 185k
-output tokens per problem on Qwen3.8-27B against 10.5k on Luna and 7.9k on Terra. Read a
-low GPT bar as "this model at the effort the provider defaults to", not as the model's
-ceiling.
-
-Fable 5 has NO manager arm -- that run was commissioned to measure the model, not the
-scaffold (see run_fable5_5pass_single.sh) -- so no Delta here is a within-model Delta.
-
-Bars only. The dot twin drew the same numbers in the same left-to-right order and was a
-second rendering rather than a second view; the CIs it carried are on the bars.
-
-    uv run --with matplotlib --with numpy --with scipy python \\
-        paper_plot_script/plot_q38_vs_fable5_5_pass.py
-
-Writes paper/plots/<title-slug>_bars_light.pdf (the "_bars" suffix is what
-make_figures_tex.py's panels=("bars",) entry looks for).
-"""
+"""How close do the manager arms get to Fable 5? LCB-100 x 5 passes."""
 import json
 import os
 
@@ -61,29 +18,10 @@ from plot_16k_reason_off_5_pass import (
 )
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)             # repo root, one level up from paper_plot_script/
+ROOT = os.path.dirname(HERE)
 R4 = f"{ROOT}/runs/4models-1pass-reason-on/results"
 PASSES = [1, 2, 3, 4, 5]
 
-# key -> (label, results file pattern). Order is the order they are drawn, left to right.
-#
-# These read the *.regraded.json files, not the originals. LiveCodeBench's stdin mock had a
-# stateless buffer.readline() that returned line 1 on every call, so any solution reading
-# multi-line input through it scored wrong however correct it was (escalation/regrade.py;
-# paper S3.3).
-#
-# The exposure tracks how often a model writes that idiom, which is a matter of coding
-# style, so the re-score is NOT a constant offset across these arms -- it is the largest
-# single correction in the figure and it lands almost entirely on one bar:
-#
-#     Fable-5        0% of solutions use buffer.readline    +0.0 pp
-#     Qwen3.8-27B    3%                                     +2.0
-#     GPT-5.6-Luna  12%                                     +7.4
-#     GPT-5.6-Terra 18%                                    +12.4   <- 72.6 -> 85.0
-#
-# Every flip is a fail becoming a pass; nothing goes the other way. Point these back at the
-# plain .json and the chart silently reverts to the buggy grader, which would show Terra's
-# manager arm 12 points lower for reasons that have nothing to do with the scaffold.
 ARMS = {
     "q38_multi": ("Qwen3.8-27B, with manager", f"{R4}/q38_multiagent_p%d.regraded.json"),
     "luna_multi": ("GPT-5.6-Luna, with manager", f"{R4}/luna_multiagent_p%d.regraded.json"),
@@ -92,30 +30,21 @@ ARMS = {
                      f"{ROOT}/runs/fable5-5pass-single/results/fable5_single_p%d.regraded.json"),
 }
 
-# Each manager arm against the reference, on the same 100 problems: (key a, key b, name).
-# Delta is b - a, so a positive number means Fable 5 is still ahead.
 TESTS = [
     ("q38_multi", "fable_single", "Fable-5 − Qwen3.8-27B + manager"),
     ("luna_multi", "fable_single", "Fable-5 − GPT-5.6-Luna + manager"),
     ("terra_multi", "fable_single", "Fable-5 − GPT-5.6-Terra + manager"),
 ]
 
-# One x per model.
 X = {"q38_multi": 0.0, "luna_multi": 1.0, "terra_multi": 2.0, "fable_single": 3.0}
 
-# hue = model. Qwen3.8-27B keeps the teal it has wherever both its arms are drawn, and
-# Fable-5 the magenta the reasoning-ON chart gives Opus-5, both being Anthropic models --
-# those two never appear together, so the hue is free to mean "the Anthropic arm" in each.
-# The GPT-5.6 pair takes bronze and blue, unused by anything sharing a figure with them.
-# Every manager arm takes its model's DARK step, as it does in the sibling charts, so a
-# reader arriving from one of those still reads dark = with manager.
 FILLS = {
-    "q38_multi": "#10605a",        # deep teal (shared palette; see plot_4new FILLS)
-    "luna_multi": "#2f6fbf",       # blue
-    "terra_multi": "#3b7f26",      # deep green
-    "fable_single": "#e6a7a0",     # salmon; the reference, and the one arm that is not a manager
+    "q38_multi": "#10605a",
+    "luna_multi": "#2f6fbf",
+    "terra_multi": "#3b7f26",
+    "fable_single": "#e6a7a0",
 }
-FABLE_DARK = "#a8306a"      # only for the reference line and Fable-5's ring
+FABLE_DARK = "#a8306a"
 
 TITLE = ("The manager arms against Fable-5 "
          "— LCB-100, 5 passes, 128k max tokens, reasoning ON")
@@ -124,11 +53,8 @@ CAPTION = ("\\textbf{How much of the gap does the scaffold buy?} 128k $\\times$ 
            "reasoning on, three models behind a manager against Fable~5's single call.")
 
 BAR_W = 0.46
-YLIM = 104          # headroom for the value labels over the tallest bar, and no more:
-                    # with the cross-model bracket gone there is nothing else up there
+YLIM = 104
 
-# Four blocks share the width two used to, and the right column names arms in full, so
-# the axes give the width back through `right` and the deeper block stack through `bottom`.
 PANEL_X = 0.725
 Q38_MARGINS = dict(MARGINS, right=0.70, bottom=0.315)
 
@@ -168,7 +94,6 @@ def notes(stats):
 # --------------------------------------------------------------------------- data
 
 def load_arm(pattern):
-    """-> dict(passed[P, N] bool, nonempty[P, N] bool, n_length, n_refusal, qids)."""
     qids, passed, nonempty, finish = None, [], [], []
     for p in PASSES:
         recs = json.load(open(pattern % p))["lcb"]["records"]
@@ -193,8 +118,8 @@ def compute():
         arms[key] = dict(
             a, key=key, label=label,
             score=100 * a["passed"].mean(),
-            ci=pass_ci(100 * a["passed"].mean(axis=1)),   # across the 5 passes
-            prob=a["passed"].mean(axis=0),                # per-problem rate over 5 passes
+            ci=pass_ci(100 * a["passed"].mean(axis=1)),
+            prob=a["passed"].mean(axis=0),
             ne=100 * a["nonempty"].mean(),
         )
 
@@ -209,8 +134,6 @@ def compute():
         tst["p_holm"] = ph
         tst["sig"] = ph < ALPHA
 
-    # "Qwen3.8-27B, with manager" -> "Qwen3.8-27B": the model name alone, for notes that
-    # list every arm and would otherwise repeat "with manager" four times
     short = {k: v["label"].split(",")[0] for k, v in arms.items()}
     return dict(arms=arms, tests=tests, short=short)
 
@@ -227,28 +150,22 @@ def draw(stats, theme="light", save=None):
     by_a = {tst["a"]: tst for tst in stats["tests"]}
 
     ax.set(xlim=(-0.62, 3.62), ylim=(0, YLIM))
-    ax.set_xticks([0, 1, 2, 3], [""] * 4)   # names live in the per-model block below
+    ax.set_xticks([0, 1, 2, 3], [""] * 4)
     ax.set_ylabel("Accuracy (pass@1, %)", fontsize=FS_BODY, color=t["ink2"])
     ax.xaxis.grid(False)
-    ax.yaxis.grid(False)  # no background gridlines; every mark already carries a printed value label
+    ax.yaxis.grid(False)
     ax.set_axisbelow(True)
     ax.tick_params(length=0, labelsize=FS_BODY)
     for spine in ("left", "bottom"):
         ax.spines[spine].set_color(t["axis"])
 
-    # ---- Fable-5's score as a rule across the panel: the thing the managers are chasing.
-    # With the residuals down at 1-10 pp the bar tops alone do not read as ordered, and
-    # the rule is what makes each manager arm read as sitting under it.
     fable = arms["fable_single"]["score"]
     ax.axhline(fable, ls=(0, (6, 4)), lw=1.6, color=FABLE_DARK, alpha=0.85, zorder=2)
 
-    # ---- one bar per condition on its model's centre line
     for key, arm in arms.items():
         x, y, (lo, hi) = X[key], arm["score"], arm["ci"]
         ax.bar(x, y, BAR_W, color=FILLS[key], zorder=3,
                edgecolor=ring(FILLS[key], theme), linewidth=EDGE_LW)
-        # bar runs the full interval on top of the mark, so an interval narrower than the
-        # marker stays visible
         ax.plot([x, x], [lo, hi], lw=CI_LW, color=t["ink"],
                 solid_capstyle="butt", zorder=5)
         for end in (lo, hi):
@@ -256,13 +173,6 @@ def draw(stats, theme="light", save=None):
         ax.annotate(f"{y:.1f}", xy=(x, hi), xytext=(0, 6), textcoords="offset points",
                     ha="center", va="bottom", fontsize=FS_BODY, color=t["ink"])
 
-    # ---- blocks under the axis. Four groups on a ~4in axis, so each line has to fit in a
-    # quarter of it: no size row (three of the four are undisclosed, so the row said
-    # nothing and was the widest thing here), and the residual is "gap" rather than
-    # "Δ vs Fable-5", which at this pitch ran into the block beside it.
-    # 2 significant figures on p, not the 1 the sibling charts use: Holm multiplies the
-    # permutation floor 5e-6 by 3 here, and "<1x10^-5" rounded from 1.5e-5 would claim a
-    # bound the test does not support.
     drop = 0
     for key, arm in arms.items():
         rows = [(stats["short"][key], FS_HEAD, "bold", t["ink"])]
@@ -274,8 +184,6 @@ def draw(stats, theme="light", save=None):
             rows += [(f"gap {-tst['delta']:+.1f} pp", FS_NOTE, "normal", col),
                      (f"p {fmt_p_num(tst['p_holm'], 2, tst['floored'])}",
                       FS_NOTE, "normal", col)]
-        # max, not last: the reference block is a row shorter than the other three, and
-        # taking whatever the loop ended on would hang the axis note inside them
         drop = max(drop, model_block(ax, X[key], rows))
 
     ax.annotate("Same 100 problems, 5 passes per condition; every bar but Fable-5 is a "
@@ -284,7 +192,6 @@ def draw(stats, theme="light", save=None):
                 xytext=(0, -(drop + 12)), textcoords="offset points",
                 ha="center", va="top", fontsize=FS_BODY, color=t["ink2"])
 
-    # ---- right column: model swatches, then what the rule means
     def swatch(colour):
         return Patch(facecolor=colour, edgecolor=ring(colour, theme), linewidth=EDGE_LW)
 
@@ -292,7 +199,6 @@ def draw(stats, theme="light", save=None):
     names = [f"{stats['short'][k]}\n{'single call' if k == 'fable_single' else 'with manager'}"
              for k in arms]
 
-    # label wraps: the column is ~2.4in wide on the page, one line would run off the canvas
     legend2 = [Line2D([], [], ls=(0, (6, 4)), lw=1.6, color=FABLE_DARK,
                       label=f"Fable-5 single call\n{fable:.1f}%"),
                Line2D([], [], ls="", label="Δ under each bar is\nits gap to that line")]
@@ -303,8 +209,6 @@ def draw(stats, theme="light", save=None):
     side_panel(fig, t, swatches, names, legend2, panel_x=PANEL_X,
                trend_kw=dict(handletextpad=0.7, handlelength=2.2))
     if save:
-        # no bbox_inches="tight": the canvas is authored at exactly PAGE_SCALE x the size
-        # it is printed, and a crop would scale the type differently per chart
         write_figure(fig, save)
     plt.close(fig)
 
@@ -328,7 +232,7 @@ def main():
               f"  p_perm {pre}{tst['p_perm']:.2e}  p_holm {tst['p_holm']:.2e}")
 
     os.makedirs(PLOTS, exist_ok=True)
-    for theme in ("light",):  # no dark twin -- the paper only \inputs light
+    for theme in ("light",):
         draw(stats, theme, save=os.path.join(PLOTS, f"{slug(TITLE)}_bars_{theme}.pdf"))
 
 

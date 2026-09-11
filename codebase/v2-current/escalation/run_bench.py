@@ -1,10 +1,4 @@
-"""Benchmark driver: run one engine (escalate ladder / multiagent / single) over
-LiveCodeBench, AIME, MATH-500, GPQA or HLE and write the graded records as JSON.
-
-Usage (from repo root, so LiveCodeBench is importable):
-    uv run --project /home/persis/model-test python escalation/run_bench.py \\
-        --engine single --only lcb --lcb 100 --ids-file <ids.json> --out <results.json>
-"""
+"""Benchmark driver"""
 
 import os
 import re
@@ -14,34 +8,21 @@ import argparse
 import traceback
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
-LCB = os.path.join(ROOT, "LiveCodeBench")
+ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))   # repo root, three up from escalation/
+LCB = os.path.join(ROOT, "codebase", "livecodebench")
+RUNS = os.path.join(ROOT, "runs")
 sys.path.insert(0, LCB)
 sys.path.insert(0, HERE)
 
-from orchestrator import (escalate, CODE_SPEC, MATH_SPEC, MATH500_SPEC, GPQA_SPEC,  # noqa: E402
-                          HLE_SPEC, LADDER)
+from orchestrator import (escalate, CODE_SPEC, MATH_SPEC, MATH500_SPEC, GPQA_SPEC, HLE_SPEC, LADDER)
 
-# Selected solver engine (set in main): escalate ladder or multi-agent workspace.
 SOLVE = escalate
-# How many problems to solve concurrently (I/O-bound cloud calls). Set high for a
-# paid API with generous rate limits; keep at 1 for the local ollama ladder.
 PARALLEL = int(os.environ.get("BENCH_PARALLEL", "1"))
-# Select the hardest problems per benchmark (see each run_* for the criterion).
 HARDEST = os.environ.get("BENCH_HARDEST", "0") == "1"
-# HLE is graded by an LLM judge (its official method); a string match badly under-counts
-# free-form answers. Defaults to the multiagent model, then the top ladder rung -- a weak
-# self-judge inflates the score, so set this explicitly to something strong.
 HLE_JUDGE_MODEL = os.environ.get("HLE_JUDGE_MODEL", "")
-# ~10-13% of HLE questions carry an image; chat() is text-only, so exclude them by default
-# and report the run as text-only rather than scoring them as silent failures.
 HLE_TEXT_ONLY = os.environ.get("HLE_TEXT_ONLY", "1") == "1"
-# Local copy of the gated dataset (hf download cais/hle --local-dir escalation/data/hle);
-# falls back to the Hub if absent.
 HLE_PARQUET = os.environ.get("HLE_PARQUET", os.path.join(
     HERE, "data", "hle", "data", "test-00000-of-00001.parquet"))
-# Restrict to the multiple-choice subset (513 of the 2158 text-only questions). Those are
-# graded deterministically by letter, so this makes the whole run judge-free.
 HLE_MCQ_ONLY = os.environ.get("HLE_MCQ_ONLY", "1") == "1"
 
 
@@ -50,7 +31,6 @@ def log(msg):
 
 
 def _parallel_map(fn, items):
-    """Map fn over items, concurrently if PARALLEL > 1, preserving order."""
     if PARALLEL <= 1:
         return [fn(x) for x in items]
     from concurrent.futures import ThreadPoolExecutor
@@ -66,27 +46,21 @@ def _status_counts(records):
 
 
 def _classify_status(parseable, status):
-    """Distinguish why an attempt failed: error / truncated / empty_stop / ok.
-    `parseable`: was a usable code/answer extracted? `status`: dict from SOLVE(status_out=)."""
     if parseable:
         return "ok"
-    # No usable answer AND the gateway gave up on providers (all stalled/errored) -> this is
-    # an INFRASTRUCTURE failure, not the model answering wrong. Kept separate so it can be
-    # excluded from pass@1 rather than counted as a fail.
     if status.get("infra_exhausted") or status.get("infra_fail"):
         return "infra"
     if status.get("error"):
         return "error"
     if status.get("finish_reason") == "length" or status.get("truncated_calls", 0) > 0:
-        return "truncated"      # hit the token cap
-    return "empty_stop"         # finished cleanly but produced no parseable answer (or refusal)
+        return "truncated"
+    return "empty_stop"
 
 
 # --------------------------------------------------------------------------
 # LiveCodeBench (code generation)
 # --------------------------------------------------------------------------
-# Inlined from lcb_runner.prompts.code_generation.PromptConstants to avoid a
-# cwd-relative few-shot file load triggered by importing that module.
+
 _FMT_STARTER = ("You will use the following starter code to write the solution to the "
                 "problem and enclose your code within delimiters.")
 _FMT_STDIN = ("Read the inputs from stdin solve the problem and write the answer to stdout "
@@ -115,8 +89,6 @@ def run_lcb(n, ids_file):
     by_id = {p.question_id: p for p in dataset}
 
     if HARDEST:
-        # "hardest" for LCB = latest hard problems (contamination-free / most recent),
-        # since there is no finer difficulty signal within the `hard` label.
         hard = [p for p in dataset if p.difficulty.value == "hard"]
         after = os.environ.get("LCB_AFTER")
         if after:
@@ -139,7 +111,7 @@ def run_lcb(n, ids_file):
         try:
             raw = SOLVE(build_code_prompt(prob), CODE_SPEC, log=plog, status_out=status,
                         tests=prob.public_test_cases)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             plog(f"ERROR: {e}")
             status["error"] = str(e)
             raw = ""
@@ -155,9 +127,6 @@ def run_lcb(n, ids_file):
     records = [{"question_id": p.question_id, "code": c, "status": s.get("class"),
                 "finish_reason": s.get("finish_reason"), "completion_tokens": s.get("completion_tokens"),
                 "truncated_calls": s.get("truncated_calls"), "n_calls": s.get("n_calls"),
-                # workspace holding this problem's transcript.jsonl (full prompts, responses
-                # and thinking) -- without it, linking a row back to its calls means
-                # recomputing md5(prompt) by hand.
                 "ws": s.get("ws")}
                for p, (c, s) in zip(picked, solved)]
 
@@ -173,8 +142,6 @@ def run_lcb(n, ids_file):
     for rec, p in zip(records, passed):
         rec["passed"] = bool(p)
         log(f"  {rec['question_id']}: {'PASS' if p else 'FAIL'}")
-    # Exclude infra failures (provider gave up -> no attempt) from pass@1: they are not the
-    # model answering wrong. Report both the graded rate and the count set aside.
     graded = [r for r in records if r.get("status") != "infra"]
     n_infra = len(records) - len(graded)
     npass = sum(r["passed"] for r in graded)
@@ -206,11 +173,9 @@ def extract_answer_int(text):
 def run_aime(n):
     from datasets import load_dataset
 
-    # AIME 2025 has two 15-problem exams (I + II); concat for up to 30 problems.
     ds = list(load_dataset("opencompass/AIME2025", "AIME2025-I", split="test")) \
         + list(load_dataset("opencompass/AIME2025", "AIME2025-II", split="test"))
     if HARDEST:
-        # AIME difficulty rises with problem number; take #11-15 (hardest third) of each 15-problem exam
         idx = [10, 11, 12, 13, 14, 25, 26, 27, 28, 29]
         picked = [ds[i] for i in idx if i < len(ds)][:n]
     else:
@@ -219,7 +184,6 @@ def run_aime(n):
 
     def _solve_aime(item):
         i, ex = item
-        # Some AIME2025-II answers carry stray LaTeX (e.g. "336^\\circ"); extract the int.
         gm = re.search(r"-?\d+", str(ex["answer"]))
         gold = int(gm.group()) if gm else -1
         plog = lambda m: log(f"[AIME {i + 1}] {m}")
@@ -228,7 +192,7 @@ def run_aime(n):
         status = {}
         try:
             raw = SOLVE(prompt, MATH_SPEC, log=plog, status_out=status)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             plog(f"ERROR: {e}")
             status["error"] = str(e)
             raw = ""
@@ -250,7 +214,6 @@ def run_aime(n):
 # MATH-500 and GPQA (free-form string answers)
 # --------------------------------------------------------------------------
 def _strip_boxed(s):
-    """Return the contents of the last \\boxed{...} with balanced braces, else s."""
     s = str(s)
     key = "\\boxed{"
     i = s.rfind(key)
@@ -265,7 +228,6 @@ def _strip_boxed(s):
 
 
 def _norm(s):
-    """Normalize a math/text answer for lenient comparison."""
     s = _strip_boxed(s)
     for a, b in [("\\left", ""), ("\\right", ""), ("\\!", ""), ("\\,", ""), ("\\;", ""),
                  ("\\dfrac", "\\frac"), ("$", ""), ("\\text", ""), ("{", ""), ("}", ""),
@@ -296,7 +258,7 @@ def _answer_match(pred, gold):
         return abs(float(p) - float(g)) < 1e-6
     except ValueError:
         pass
-    return g in p or p in g  # lenient containment (units/extra text)
+    return g in p or p in g
 
 
 def _run_qa(name, spec, picked, gold_of, prompt_of):
@@ -308,7 +270,7 @@ def _run_qa(name, spec, picked, gold_of, prompt_of):
         status = {}
         try:
             raw = SOLVE(prompt_of(ex), spec, log=plog, status_out=status)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             plog(f"ERROR: {e}")
             status["error"] = str(e)
             raw = ""
@@ -340,13 +302,11 @@ def run_math500(n):
 
 
 def run_gpqa(n):
-    """Standard 4-way MCQ GPQA-diamond from the official CSV (github idavidrein/gpqa,
-    password-protected zip; no HF token). Grade by chosen letter."""
     import csv
     import random
     path = os.environ.get("GPQA_CSV", os.path.join(HERE, "data", "gpqa_diamond.csv"))
     rows = list(csv.DictReader(open(path)))
-    if HARDEST:  # rank by the writer's difficulty estimate (post-grad > hard-undergrad > ...)
+    if HARDEST: 
         def _hard(r):
             t = (r.get("Writer's Difficulty Estimate", "") or "").lower()
             return next((s for s, k in [(4, "post-grad"), (4, "graduate"), (3, "hard undergrad"),
@@ -379,13 +339,6 @@ def run_gpqa(n):
             plog(f"ERROR: {e}")
             status["error"] = str(e)
             raw = ""
-        # openai/simple-evals ANSWER_PATTERN_MULTICHOICE, so scores are comparable to
-        # published GPQA numbers. [ \t] (not \s) is load-bearing: it can't cross a
-        # newline, so a prose "### Final Answer:" header can't bridge to the letter on
-        # the next line and capture the 'A' of "ANSWER". No prose fallback -- upstream
-        # scores a missing answer 0.0 rather than guessing a letter out of the reasoning.
-        # Deviation from upstream: last match, not first (the spec asks for the answer
-        # on the FINAL line, so a mid-reasoning "Answer: B" should not win).
         m = re.findall(r"(?i)Answer[ \t]*:[ \t]*\$?([A-D])\$?", raw)
         pred = m[-1].upper() if m else ""
         ok = pred == ex["gold"]
@@ -429,17 +382,13 @@ def _judge_model():
 
 
 def _hle_judge(question, gold, response, plog):
-    """Grade one HLE response with an LLM judge. Returns (correct, extracted, confidence).
-
-    A judge error or unparseable verdict counts as FAIL and is logged: never guess a pass.
-    """
     from orchestrator import chat
     if not response.strip():
         return False, "", 0
     try:
         raw = chat(_judge_model(), [{"role": "user", "content": _HLE_JUDGE_PROMPT.format(
             question=question, response=response[:20000], correct_answer=gold)}], temperature=0.0)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         plog(f"JUDGE ERROR: {e}")
         return False, "", 0
     ok = re.findall(r"^\s*correct\s*:\s*(yes|no)", raw, re.I | re.M)
@@ -452,21 +401,11 @@ def _hle_judge(question, gold, response, plog):
             int(conf[-1]) if conf else 0)
 
 
-# Shaped like run_gpqa's matcher but [A-Z], not [A-D]: HLE multiple-choice runs well past D
-# (golds reach V, and one question offers 26 options). [ \t] rather than \s is load-bearing --
-# it cannot cross a newline, so a prose "### Final Answer:" header can't bridge to the letter
-# on the next line and capture the 'A' of "ANSWER". Last match wins, since the spec asks for
-# the answer on the FINAL line: a mid-reasoning "Answer: B" must not beat the conclusion.
 _MCQ_RE = re.compile(r"(?i)Answer[ \t]*:[ \t]*\$?([A-Z])\$?\b")
 _CONF_RE = re.compile(r"(?im)^\s*CONFIDENCE[ \t]*:[ \t]*(\d+)")
 
 
 def _hle_grade_mcq(response, gold):
-    """Deterministic letter grading -- no LLM. Returns (correct, extracted, confidence).
-
-    An unextractable letter is a FAIL with pred='' (run_hle counts these separately, so a
-    low score caused by format drift is distinguishable from one caused by wrong answers).
-    """
     m = _MCQ_RE.findall(response or "")
     pred = m[-1].upper() if m else ""
     conf = _CONF_RE.findall(response or "")
@@ -474,26 +413,17 @@ def _hle_grade_mcq(response, gold):
 
 
 def run_hle(n):
-    """Humanity's Last Exam (cais/hle, 2500-question public test split).
-
-    Gated dataset: accept the terms on the Hub once, or load_dataset raises. BENCH_HARDEST is
-    a deliberate no-op -- HLE has no per-question difficulty field, every question is frontier-hard.
-    """
     import random
     from datasets import load_dataset
 
     if os.path.exists(HLE_PARQUET):
         ds = load_dataset("parquet", data_files=HLE_PARQUET, split="train")
-    else:  # gated on the Hub: accept the terms once, then hf download (see CLAUDE.md)
+    else:
         ds = load_dataset("cais/hle", split="test")
-    # image_preview and rationale_image are Image() features: decoding ANY row needs Pillow,
-    # which this project does not install. Drop them before touching a row. The plain
-    # `image` string column (a data URI) is what actually marks a question multimodal.
     ds = ds.remove_columns([c for c in ("image_preview", "rationale_image")
                             if c in ds.column_names])
     n_total = len(ds)
     if HLE_TEXT_ONLY:
-        # input_columns= keeps filter from materializing the whole 274MB image column per row.
         ds = ds.filter(lambda im: not im, input_columns="image")
     ds = ds.remove_columns(["image"])
     n_text = len(ds)
@@ -502,7 +432,7 @@ def run_hle(n):
 
     idx = list(range(len(ds)))
     if 0 < n < len(idx):
-        idx = sorted(random.Random(42).sample(idx, n))  # seeded: same subset across configs
+        idx = sorted(random.Random(42).sample(idx, n))
     picked = [ds[i] for i in idx]
     tag = "HLE" + (" text-only" if HLE_TEXT_ONLY else "") + (" MCQ" if HLE_MCQ_ONLY else "")
     log(f"\n=== {tag}: {len(picked)} of {len(ds)} eligible "
@@ -518,7 +448,7 @@ def run_hle(n):
         plog(f"start {ex.get('category', '?')} / {ex.get('answer_type', '?')}")
         try:
             raw = SOLVE(ex["question"], HLE_SPEC, log=plog)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             plog(f"ERROR: {e}")
             raw = ""
         if ex.get("answer_type") == "multipleChoice":
@@ -535,7 +465,7 @@ def run_hle(n):
     acc = 100.0 * sum(r["passed"] for r in records) / max(1, len(records))
     unparsed = sum(1 for r in records if not r["pred"])
     log(f"HLE pass@1 = {acc:.1f}%  ({sum(r['passed'] for r in records)}/{len(records)})")
-    if unparsed:  # format drift, not wrong answers -- keep the two causes distinguishable
+    if unparsed: 
         log(f"    WARNING: {unparsed}/{len(records)} responses had no extractable answer")
     name = "hle" + ("_text_only" if HLE_TEXT_ONLY else "") + ("_mcq" if HLE_MCQ_ONLY else "")
     return {"benchmark": name, "pass@1": acc, "unparsed": unparsed,
@@ -550,8 +480,8 @@ def main():
     ap.add_argument("--math500", type=int, default=100)
     ap.add_argument("--gpqa", type=int, default=198)
     ap.add_argument("--hle", type=int, default=200, help="0 = all eligible questions")
-    ap.add_argument("--ids-file", default=os.path.join(ROOT, "hard100.json"))
-    ap.add_argument("--out", default=os.path.join(HERE, "results.json"))
+    ap.add_argument("--ids-file", default=os.path.join(HERE, "lcb100_hardest_v6.json"))
+    ap.add_argument("--out", default=os.path.join(RUNS, "results.json"))
     ap.add_argument("--only", choices=["lcb", "aime", "math500", "gpqa", "hle"], default=None)
     ap.add_argument("--engine", choices=["escalate", "multiagent", "single"], default="escalate")
     ap.add_argument("--parallel", type=int, default=PARALLEL, help="# problems solved concurrently")
@@ -581,7 +511,7 @@ def main():
     try:
         if args.only:
             out[args.only] = run_map[args.only]()
-        else:  # default: legacy lcb + aime
+        else: 
             if args.lcb > 0:
                 out["lcb"] = run_map["lcb"]()
             if args.aime > 0:

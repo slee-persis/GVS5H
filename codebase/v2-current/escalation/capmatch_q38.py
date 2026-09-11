@@ -18,7 +18,7 @@ past the reasoning, it sees a truncated answer; inside the reasoning, the answer
 exist at all and the harness's empty-content fallback hands it the truncated reasoning
 instead -- which is why so many cut-off generations still yield code (S2.2).
 
-    uv run --project /home/persis/model-test python escalation/capmatch_q38.py
+    uv run --no-project --python 3.12 --with datasets --with numpy python escalation/capmatch_q38.py
 
 Writes <name>.cap128k.json next to each source file; grade them with regrade.py.
 """
@@ -28,17 +28,17 @@ import os
 import sys
 import urllib.request
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "LiveCodeBench"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "livecodebench"))
 from lcb_runner.utils.extraction_utils import extract_code
 from lcb_runner.lm_styles import LMStyle
 
 CAP = 128_000
 MODEL = os.environ.get("CAPMATCH_MODEL", "Qwen/Qwen3.8-27B-FP8")
 BASE = os.environ.get("CAPMATCH_BASE", "http://localhost:8215")
-RESULTS = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                       "runs/4models-1pass-reason-on/results")
-WS = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                  "runs/4models-1pass-reason-on/ws")
+ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                    "..", "..", ".."))   # repo root, three up from escalation/
+RESULTS = os.path.join(ROOT, "runs/4models-1pass-reason-on/results")
+WS = os.path.join(ROOT, "runs/4models-1pass-reason-on/ws")
 
 
 def _post(path, payload):
@@ -99,6 +99,8 @@ def main():
         cut = changed = 0
         for r in recs:
             ws = r.get("ws")
+            if ws:
+                ws = os.path.join(WS, *ws.split("/")[-2:])   # <config>/<hash>, re-rooted under runs/
             if not ws or not os.path.isdir(ws):
                 continue
             call = call_of(ws)
