@@ -1,0 +1,1008 @@
+{
+  "engine": "single",
+  "model": "openrouter:anthropic/claude-opus-5",
+  "lcb": {
+    "benchmark": "livecodebench",
+    "pass@1": 88.0,
+    "records": [
+      {
+        "question_id": "arc196_b",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    T = int(data[0]); pos = 1\n    MOD = 998244353\n    TAB = bytes.maketrans(b'AB', b'10')\n    out = []; PREF = None\n    for _ in range(T):\n        H = int(data[pos]); W = int(data[pos+1])\n        rows = data[pos+2: pos+2+H]; pos += 2 + H\n        if H > W:\n            rows = list(map(bytes, zip(*rows))); H, W = W, H\n        ONES = (1 << W) - 1\n        E = []; Bm = []; Ea = E.append; Ba = Bm.append\n        Q = 0; bad = False\n        if W <= 16:\n            if PREF is None:\n                PREF = list(range(65536))\n                for k in (1,2,4,8):\n                    PREF = [v ^ (v >> k) for v in PREF]\n            P = PREF\n            for s in rows:\n                am = int(s.translate(TAB), 2); px = P[am]\n                if px & 1: bad = True; break\n                Q ^= am; Ea(px ^ Q); Ba(ONES ^ am)\n        else:\n            shifts = []; k = 1\n            while k < W: shifts.append(k); k += k\n            for s in rows:\n                am = int(s.translate(TAB), 2); px = am\n                for k in shifts: px ^= px >> k\n                if px & 1: bad = True; break\n                Q ^= am; Ea(px ^ Q); Ba(ONES ^ am)\n        if bad or Q:\n            out.append(0); continue\n        par = list(range(W)); compmask = {}\n        virgin = ONES; Cval = 0; merges = 0\n        for Bi, Ei in zip(Bm, E):\n            if not Bi: continue\n            nv = Bi & virgin; rest = Bi - nv\n            if nv:\n                virgin -= nv\n                bs = bin(nv); L = len(bs); p0 = L - 3\n                c = bs.count('1'); merges += c\n                if c > 1:\n                    ix = bs.find('1', 3)\n                    while ix > 0:\n                        par[L-1-ix] = p0\n                        ix = bs.find('1', ix+1)\n                compmask[p0] = nv\n                Cval = (Cval & ~nv) | (Ei & nv)\n                curroot = p0; curmask = nv; kk = 0; first = False\n            else:\n                first = True; curroot = 0; curmask = 0; kk = 0\n            while rest:\n                p = rest.bit_length() - 1\n                r = p; pr = par[r]\n                while pr != r:\n                    r = pr; pr = par[r]\n                x = p\n                while par[x] != r:\n                    par[x], x = r, par[x]\n                m = compmask[r]\n                if first:\n                    kk = ((Cval ^ Ei) >> p) & 1\n                    curroot = r; curmask = m; first = False\n                else:\n                    if (((Cval ^ Ei) >> p) & 1) != kk:\n                        Cval ^= m\n                    par[r] = curroot\n                    curmask |= m\n                    compmask[curroot] = curmask\n                    del compmask[r]\n                merges += 1\n                rest &= ~m\n        for Bi, Ei in zip(Bm, E):\n            t = (Cval ^ Ei) & Bi\n            if t and t != Bi:\n                bad = True; break\n        out.append(0 if bad else pow(2, H + W - merges, MOD))\n    sys.stdout.write('\\n'.join(map(str, out)))\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 79302,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "arc196_c",
+        "code": "",
+        "status": "truncated",
+        "finish_reason": "length",
+        "completion_tokens": 128000,
+        "truncated_calls": null,
+        "passed": false
+      },
+      {
+        "question_id": "arc196_a",
+        "code": "import sys, heapq\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0])\n    a = list(map(int, data[1:1+n]))\n\n    if n % 2 == 0:\n        b = sorted(a)\n        h = n // 2\n        sys.stdout.write(str(sum(b[h:]) - sum(b[:h])) + \"\\n\")\n        return\n\n    def prefix_values(arr):\n        # res[j] (j even) = sum(top j/2) - sum(bottom j/2) of arr[:j]\n        low = []   # max-heap (negated) : smaller half\n        high = []  # min-heap : larger half\n        sl = 0\n        sh = 0\n        m = len(arr)\n        res = [0] * (m + 1)\n        hp_low = heapq.heappush\n        hp_high = heapq.heappush\n        pop_low = heapq.heappop\n        pop_high = heapq.heappop\n        for idx in range(m):\n            x = arr[idx]\n            hp_low(low, -x); sl += x\n            v = -pop_low(low); sl -= v\n            hp_high(high, v); sh += v\n            if len(high) > len(low):\n                v = pop_high(high); sh -= v\n                hp_low(low, -v); sl += v\n            j = idx + 1\n            if j & 1 == 0:\n                res[j] = sh - sl\n        return res\n\n    pre = prefix_values(a[:n-1])      # values for prefixes of lengths 0..n-1\n    suf = prefix_values(a[:0:-1])     # values for suffixes of lengths 0..n-1\n\n    ans = 0\n    for i in range(1, n + 1, 2):\n        v = pre[i-1] + suf[n-i]\n        if v > ans:\n            ans = v\n    sys.stdout.write(str(ans) + \"\\n\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 8367,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "arc196_d",
+        "code": "",
+        "status": "truncated",
+        "finish_reason": "length",
+        "completion_tokens": 128000,
+        "truncated_calls": null,
+        "passed": false
+      },
+      {
+        "question_id": "3777",
+        "code": "from typing import List\n\nclass Solution:\n    def maxProduct(self, nums: List[int], k: int, limit: int) -> int:\n        OFF = 1800\n        if abs(k) > OFF:\n            return -1\n        target = k + OFF\n        best = -1\n\n        # Case B: subsequence containing at least one zero -> product 0\n        if 0 in nums:\n            M = [[0, 0], [0, 0]]\n            M[0][0] = 1 << OFF   # empty subsequence, sum 0, parity 0, no zero used\n            for x in nums:\n                N = [[M[0][0], M[0][1]], [M[1][0], M[1][1]]]\n                for p in (0, 1):\n                    for z in (0, 1):\n                        m = M[p][z]\n                        if not m:\n                            continue\n                        nz = z | (1 if x == 0 else 0)\n                        if p == 0:\n                            N[1][nz] |= m << x\n                        else:\n                            N[0][nz] |= m >> x\n                M = N\n            if ((M[0][1] | M[1][1]) >> target) & 1:\n                best = 0\n\n        # Case A: subsequence without zeros, product in [1, limit]\n        dp = {}  # product -> [mask parity0, mask parity1]  (non-empty subsequences only)\n        for x in nums:\n            if x == 0:\n                continue\n            add = {}\n            if x <= limit:\n                e = add.get(x)\n                if e is None:\n                    e = [0, 0]\n                    add[x] = e\n                e[1] |= 1 << (OFF + x)\n            for q, ms in dp.items():\n                nq = q * x\n                if nq > limit:\n                    continue\n                m0 = ms[0]\n                m1 = ms[1]\n                e = add.get(nq)\n                if e is None:\n                    e = [0, 0]\n                    add[nq] = e\n                if m0:\n                    e[1] |= m0 << x\n                if m1:\n                    e[0] |= m1 >> x\n            for q, e in add.items():\n                d = dp.get(q)\n                if d is None:\n                    dp[q] = e\n                else:\n                    d[0] |= e[0]\n                    d[1] |= e[1]\n\n        for q, ms in dp.items():\n            if q > best and (((ms[0] | ms[1]) >> target) & 1):\n                best = q\n\n        return best",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 6835,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc400_e",
+        "code": "import sys\nimport numpy as np\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    Q = int(data[0])\n    A = np.array(list(map(int, data[1:1+Q])), dtype=np.int64)\n\n    N = 1000000\n    # sieve primes\n    is_comp = np.zeros(N+1, dtype=bool)\n    is_comp[0:2] = True\n    for i in range(2, int(N**0.5)+1):\n        if not is_comp[i]:\n            is_comp[i*i::i] = True\n    primes = np.nonzero(~is_comp)[0]\n\n    cnt = np.zeros(N+1, dtype=np.int8)\n    for p in primes.tolist():\n        cnt[p::p] += 1\n\n    idx = np.arange(N+1, dtype=np.int64)\n    arr = np.where(cnt == 2, idx, 0)\n    best = np.maximum.accumulate(arr)\n\n    r = np.sqrt(A.astype(np.float64)).astype(np.int64)\n    # adjust\n    for _ in range(3):\n        mask = r*r > A\n        if not mask.any():\n            break\n        r[mask] -= 1\n    for _ in range(3):\n        mask = (r+1)*(r+1) <= A\n        if not mask.any():\n            break\n        r[mask] += 1\n    r = np.clip(r, 0, N)\n    res = best[r]\n    res = res * res\n    sys.stdout.write('\\n'.join(map(str, res.tolist())))\n    sys.stdout.write('\\n')\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 1936,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc400_g",
+        "code": "import sys\nimport numpy as np\n\nINF = float('inf')\n\ndef build(assign, V):\n    W = [[INF] * 4 for _ in range(4)]\n    ARG = [[-1] * 4 for _ in range(4)]\n    for a in range(3):\n        ia = np.flatnonzero(assign == a)\n        if ia.size == 0:\n            continue\n        va = V[a][ia]\n        for b in range(3):\n            if b == a:\n                continue\n            d = va - V[b][ia]\n            k = int(d.argmin())\n            W[a][b] = int(d[k]); ARG[a][b] = int(ia[k])\n        k = int(va.argmin())\n        W[a][3] = int(va[k]); ARG[a][3] = int(ia[k])\n    iu = np.flatnonzero(assign == 3)\n    if iu.size:\n        for b in range(3):\n            vb = V[b][iu]\n            k = int(vb.argmax())\n            W[3][b] = -int(vb[k]); ARG[3][b] = int(iu[k])\n    return W, ARG\n\ndef shortest(W, s, t):\n    dist = [INF] * 4; pre = [-1] * 4; dist[s] = 0\n    for _ in range(3):\n        changed = False\n        for a in range(4):\n            da = dist[a]\n            if da == INF: continue\n            Wa = W[a]\n            for b in range(4):\n                if b == a: continue\n                w = Wa[b]\n                if w != INF and da + w < dist[b]:\n                    dist[b] = da + w; pre[b] = a; changed = True\n        if not changed: break\n    return dist[t], pre\n\ndef apply_path(assign, ARG, pre, s, t):\n    node = t; moves = []\n    while node != s:\n        a = pre[node]\n        moves.append((ARG[a][node], node))\n        node = a\n    for item, tgt in moves:\n        assign[item] = tgt\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    allv = np.array(list(map(int, data)), dtype=np.int64)\n    T = int(allv[0]); ptr = 1\n    out = []\n    for _ in range(T):\n        N = int(allv[ptr]); K = int(allv[ptr + 1]); ptr += 2\n        flat = allv[ptr:ptr + 3 * N].reshape(N, 3); ptr += 3 * N\n        V = [np.ascontiguousarray(flat[:, 0]),\n             np.ascontiguousarray(flat[:, 1]),\n             np.ascontiguousarray(flat[:, 2])]\n        M = 2 * K\n        m = np.maximum(np.maximum(V[0], V[1]), V[2])\n        tt = np.where(V[0] >= m, 0, np.where(V[1] >= m, 1, 2)).astype(np.int8)\n        if M < N:\n            idx = np.argpartition(m, N - M)[N - M:]\n        else:\n            idx = np.arange(N)\n        assign = np.full(N, 3, dtype=np.int8)\n        assign[idx] = tt[idx]\n        U = int(m[idx].sum())\n        c = [int(np.count_nonzero(assign == j)) for j in range(3)]\n        odd = [j for j in range(3) if c[j] & 1]\n        if not odd:\n            out.append(U)\n            continue\n        p, q = odd\n        r = 3 - p - q\n        best = INF\n        for seq in ([(p, q)], [(q, p)], [(p, r), (q, r)], [(r, p), (r, q)]):\n            a = assign.copy(); tot = 0; ok = True\n            for (s, t2) in seq:\n                W, ARG = build(a, V)\n                d, pre = shortest(W, s, t2)\n                if d == INF:\n                    ok = False; break\n                tot += d\n                apply_path(a, ARG, pre, s, t2)\n            if ok and tot < best:\n                best = tot\n        out.append(U - best)\n    sys.stdout.write('\\n'.join(map(str, out)) + '\\n')\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 48889,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "3717",
+        "code": "from typing import List\n\nclass Solution:\n    def minOperations(self, nums: List[int], x: int, k: int) -> int:\n        n = len(nums)\n        vals = sorted(set(nums))\n        m = len(vals)\n        idx = {v: i + 1 for i, v in enumerate(vals)}\n        r = [idx[v] for v in nums]\n        cnt = [0] * (m + 1)\n        sm = [0] * (m + 1)\n        LOG = m.bit_length()\n\n        cost = [0] * (n - x + 1)\n        total = 0\n        kth = (x + 1) // 2\n\n        for i in range(n):\n            # add nums[i]\n            p = r[i]\n            v = nums[i]\n            while p <= m:\n                cnt[p] += 1\n                sm[p] += v\n                p += p & -p\n            total += v\n            if i >= x:\n                p = r[i - x]\n                v = nums[i - x]\n                while p <= m:\n                    cnt[p] -= 1\n                    sm[p] -= v\n                    p += p & -p\n                total -= v\n            if i >= x - 1:\n                pos = 0\n                kk = kth\n                s = 0\n                for pw in range(LOG, -1, -1):\n                    np_ = pos + (1 << pw)\n                    if np_ <= m and cnt[np_] < kk:\n                        pos = np_\n                        kk -= cnt[np_]\n                        s += sm[np_]\n                med = vals[pos]\n                cl = kth - kk\n                cost[i - x + 1] = med * cl - s + (total - s - med * (x - cl))\n\n        INF = float('inf')\n        prev = [0] * (n + 1)\n        for j in range(1, k + 1):\n            cur = [INF] * (n + 1)\n            start = j * x\n            for i in range(start, n + 1):\n                a = cur[i - 1]\n                b = prev[i - x]\n                if b is not INF:\n                    b = b + cost[i - x]\n                cur[i] = a if a < b else b\n            prev = cur\n        return prev[n]",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 2560,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "3765",
+        "code": "from typing import List\n\nclass Solution:\n    def minimumCost(self, nums: List[int], cost: List[int], k: int) -> int:\n        n = len(nums)\n        N = [0]*(n+1)\n        C = [0]*(n+1)\n        for i in range(n):\n            N[i+1] = N[i] + nums[i]\n            C[i+1] = C[i] + cost[i]\n        Cn = C[n]\n        dp = [0]*(n+1)\n        for r in range(1, n+1):\n            x = N[r] + k\n            best = None\n            for l in range(r):\n                v = dp[l] - x*C[l]\n                if best is None or v < best:\n                    best = v\n            dp[r] = best + N[r]*C[r] + k*Cn\n        return dp[n]",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 1619,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc399_e",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.read().split()\n    n = int(data[0])\n    S = data[1]\n    T = data[2]\n\n    f = [-1] * 26\n    for a, b in set(zip(S, T)):\n        u = ord(a) - 97\n        v = ord(b) - 97\n        if f[u] == -1:\n            f[u] = v\n        elif f[u] != v:\n            print(-1)\n            return\n\n    edges = sum(1 for u in range(26) if f[u] != -1 and f[u] != u)\n    if edges == 0:\n        print(0)\n        return\n\n    state = [0] * 26  # 0 unvisited, 1 in current path, 2 done\n    cycles = 0\n    for u in range(26):\n        if state[u] != 0:\n            continue\n        path = []\n        v = u\n        while state[v] == 0 and f[v] != -1 and f[v] != v:\n            state[v] = 1\n            path.append(v)\n            v = f[v]\n        if state[v] == 1:\n            cycles += 1\n        elif state[v] == 0:\n            state[v] = 2\n        for w in path:\n            state[w] = 2\n\n    if cycles > 0:\n        distinctT = len(set(T))\n        if distinctT == 26:\n            print(-1)\n            return\n\n    print(edges + cycles)\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 5148,
+        "truncated_calls": null,
+        "passed": false,
+        "passed_before_regrade": false
+      },
+      {
+        "question_id": "abc399_f",
+        "code": "import sys\nimport numpy as np\nfrom math import comb\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    N = int(data[0]); K = int(data[1])\n    p = 998244353\n    A = np.array(data[2:2+N], dtype=np.int64) % p\n\n    # prefix sums S_1..S_N mod p\n    S = np.cumsum(A) % p\n\n    # P[j][i] = S_{i+1}^j mod p\n    P = [None] * (K + 1)\n    P[0] = np.ones(N, dtype=np.int64)\n    for j in range(1, K + 1):\n        P[j] = (P[j - 1] * S) % p\n\n    ans = 0\n    for j in range(0, K + 1):\n        # T_j at position r (index r-1) = sum_{m=0}^{r-1} S_m^j\n        C = np.cumsum(P[j]) % p\n        Tj = np.empty(N, dtype=np.int64)\n        Tj[0] = 0\n        if N > 1:\n            Tj[1:] = C[:-1]\n        if j == 0:\n            # S_0^0 = 1 contributes\n            Tj = (Tj + 1) % p\n        term = ((P[K - j] * Tj) % p).sum() % p\n        coef = comb(K, j) % p\n        if j % 2 == 1:\n            coef = (-coef) % p\n        ans = (ans + coef * int(term)) % p\n\n    print(ans % p)\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 2728,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "arc195_e",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    MOD = 998244353\n    N = int(data[0]); Q = int(data[1])\n    A = [0, 0]\n    idx = 2\n    for i in range(N - 1):\n        A.append(int(data[idx + i]))\n    idx += N - 1\n\n    # inverses 1..N+1\n    M = N + 2\n    inv = [0] * (M + 1)\n    if M >= 1:\n        inv[1] = 1\n    for i in range(2, M + 1):\n        inv[i] = (MOD - (MOD // i) * inv[MOD % i]) % MOD\n\n    F = [0] * (N + 1)\n    G = [0] * (N + 1)\n    Aterm = [0] * (N + 1)\n    for i in range(2, N + 1):\n        ai = A[i] % MOD\n        # (2i-2)/(i(i+1))\n        term = (2 * i - 2) % MOD * inv[i] % MOD * inv[i + 1] % MOD * ai % MOD\n        F[i] = (F[i - 1] + term) % MOD\n        G[i] = (G[i - 1] + ai * inv[i]) % MOD\n        Aterm[i] = ai * ((1 - inv[i]) % MOD) % MOD\n    if N >= 1:\n        F[1] = 0\n        G[1] = 0\n\n    fact = 1\n    for i in range(1, N):\n        fact = fact * i % MOD\n\n    Amod = [x % MOD for x in A]\n\n    out = []\n    for q in range(Q):\n        u = int(data[idx]); v = int(data[idx + 1])\n        idx += 2\n        if u > v:\n            u, v = v, u\n        if u == v:\n            out.append(0)\n            continue\n        res = F[u - 1] + Aterm[u] + G[v - 1] - G[u] + Amod[v]\n        out.append(res % MOD * fact % MOD)\n\n    sys.stdout.write('\\n'.join(map(str, out)) + '\\n')\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 4986,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "arc195_b",
+        "code": "import sys\nimport numpy as np\nfrom collections import Counter\n\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0])\n    A = list(map(int, data[1:1 + n]))\n    B = list(map(int, data[1 + n:1 + 2 * n]))\n\n    KA = [x for x in A if x >= 0]\n    KB = [x for x in B if x >= 0]\n    na, nb = len(KA), len(KB)\n    K = na + nb - n\n    if K <= 0:\n        print(\"Yes\")\n        return\n\n    L = 0\n    if KA:\n        L = max(L, max(KA))\n    if KB:\n        L = max(L, max(KB))\n\n    cA = Counter(KA)\n    cB = Counter(KB)\n    keysA = sorted(cA)\n    keysB = sorted(cB)\n    va = np.array(keysA, dtype=np.int64)\n    ca = np.array([cA[v] for v in keysA], dtype=np.int64)\n    vb = np.array(keysB, dtype=np.int64)\n    cb = np.array([cB[v] for v in keysB], dtype=np.int64)\n\n    dA = va.size\n    dB = vb.size\n\n    chunk = max(1, 1000000 // max(1, dB))\n\n    keys_list = []\n    vals_list = []\n    for i in range(0, dA, chunk):\n        sa = va[i:i + chunk]\n        cc = ca[i:i + chunk]\n        S = sa[:, None] + vb[None, :]\n        M = np.minimum(cc[:, None], cb[None, :])\n        S = S.ravel()\n        M = M.ravel()\n        mask = S >= L\n        if not mask.all():\n            S = S[mask]\n            M = M[mask]\n        if S.size:\n            keys_list.append(S)\n            vals_list.append(M)\n\n    if not keys_list:\n        print(\"No\")\n        return\n\n    keys = np.concatenate(keys_list)\n    vals = np.concatenate(vals_list)\n\n    res = np.unique(keys, return_inverse=True)\n    u = res[0]\n    inv = res[1].ravel()\n    tot = np.bincount(inv, weights=vals.astype(np.float64))\n\n    if tot.size and tot.max() >= K - 0.5:\n        print(\"Yes\")\n    else:\n        print(\"No\")\n\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 8871,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "arc195_c",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    T = int(data[0])\n    out = []\n    idx = 1\n    OFF = 1000000\n    for _ in range(T):\n        R = int(data[idx]); B = int(data[idx+1]); idx += 2\n        if R % 2 == 1 or (R == 0 and B % 2 == 1):\n            out.append(\"No\")\n            continue\n        if R == 0:\n            m = B // 2 - 1\n            steps = [('B',1,1)]*m + [('B',1,-1)] + [('B',-1,-1)]*m + [('B',-1,1)]\n        elif B == 0:\n            m = R // 2 - 1\n            steps = [('R',0,1)]*m + [('R',1,0)] + [('R',0,-1)]*m + [('R',-1,0)]\n        elif B % 2 == 0:\n            k = B // 2; a = R // 2\n            steps = [('B',1,1)]*k + [('R',0,1)]*a + [('B',-1,-1)]*k + [('R',0,-1)]*a\n        else:\n            k = (B - 1) // 2; a = R // 2\n            steps = ([('B',1,1)]*k + [('R',1,0)]*a + [('B',-1,-1)]*(k+1)\n                     + [('R',-1,0)]*(a-1) + [('R',0,1)])\n        out.append(\"Yes\")\n        r = OFF; c = OFF\n        for t, dr, dc in steps:\n            out.append(\"%s %d %d\" % (t, r, c))\n            r += dr; c += dc\n    sys.stdout.write(\"\\n\".join(out) + \"\\n\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 11522,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": false
+      },
+      {
+        "question_id": "arc195_d",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    t = int(data[0]); pos = 1\n    out = []\n    NEG = -10**9\n    for _ in range(t):\n        n = int(data[pos]); pos += 1\n        a = data[pos:pos+n]; pos += n\n        f0 = [NEG]*(n+2)\n        f1 = [NEG]*(n+2)\n        f0[1] = 0\n        if n >= 2:\n            f1[2] = (1 if a[1] == a[0] else 0) - 1\n        for i in range(1, n):\n            s = f0[i]\n            if s > NEG:\n                L0 = a[i-1]\n                v = s + (1 if L0 == a[i] else 0)\n                if v > f0[i+1]: f0[i+1] = v\n                if i+1 < n:\n                    v2 = s + (1 if L0 == a[i+1] else 0) + (1 if a[i+1] == a[i] else 0) - 1\n                    if v2 > f1[i+2]: f1[i+2] = v2\n            if i >= 2:\n                s = f1[i]\n                if s > NEG:\n                    L1 = a[i-2]\n                    v = s + (1 if L1 == a[i] else 0)\n                    if v > f0[i+1]: f0[i+1] = v\n                    if i+1 < n:\n                        v2 = s + (1 if L1 == a[i+1] else 0) + (1 if a[i+1] == a[i] else 0) - 1\n                        if v2 > f1[i+2]: f1[i+2] = v2\n        best = f0[n]\n        if f1[n] > best: best = f1[n]\n        out.append(n - best)\n    sys.stdout.write('\\n'.join(map(str, out)) + '\\n')\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 87406,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "3744",
+        "code": "from typing import List\n\nclass Solution:\n    def minOperations(self, queries: List[List[int]]) -> int:\n        def f(n):\n            if n <= 0:\n                return 0\n            total = 0\n            k = 1\n            lo = 1\n            while lo <= n:\n                hi = min(n, lo * 4 - 1)\n                total += k * (hi - lo + 1)\n                lo *= 4\n                k += 1\n            return total\n        \n        res = 0\n        for l, r in queries:\n            s = f(r) - f(l - 1)\n            res += (s + 1) // 2\n        return res",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 474,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc398_f",
+        "code": "import sys\n\ndef main():\n    S = sys.stdin.readline().strip()\n    n = len(S)\n    if n == 0:\n        print(\"\")\n        return\n    T = S[::-1] + \"#\" + S\n    m = len(T)\n    Tb = T.encode()\n    f = [0]*m\n    k = 0\n    for i in range(1, m):\n        c = Tb[i]\n        while k and Tb[k] != c:\n            k = f[k-1]\n        if Tb[k] == c:\n            k += 1\n        f[i] = k\n    L = f[m-1]\n    ans = S + S[:n-L][::-1]\n    sys.stdout.write(ans + \"\\n\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 526,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc398_d",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.read().split()\n    n = int(data[0]); R = int(data[1]); C = int(data[2])\n    s = data[3]\n    seen = set()\n    M = 1000003\n    seen.add(0)\n    r = 0; c = 0\n    out = []\n    for ch in s:\n        if ch == 'N':\n            r -= 1\n        elif ch == 'S':\n            r += 1\n        elif ch == 'W':\n            c -= 1\n        else:\n            c += 1\n        key = (r - R) * M + (c - C)\n        out.append('1' if key in seen else '0')\n        seen.add(r * M + c)\n    sys.stdout.write(''.join(out))\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 1052,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc398_g",
+        "code": "import sys\ndef main():\n    data=sys.stdin.buffer.read().split()\n    n=int(data[0]); m=int(data[1])\n    U=[0]*m; V=[0]*m\n    deg=[0]*(n+2)\n    idx=2\n    for i in range(m):\n        u=int(data[idx]); v=int(data[idx+1]); idx+=2\n        U[i]=u; V[i]=v\n        deg[u]+=1; deg[v]+=1\n    start=[0]*(n+2)\n    s=0\n    for i in range(1,n+1):\n        start[i]=s\n        s+=deg[i]\n    start[n+1]=s\n    pos=start[:]\n    adj=[0]*(2*m)\n    for i in range(m):\n        u=U[i]; v=V[i]\n        adj[pos[u]]=v; pos[u]+=1\n        adj[pos[v]]=u; pos[v]+=1\n    color=[-1]*(n+1)\n    oddcomp=0\n    P=0\n    for st in range(1,n+1):\n        if color[st]!=-1: continue\n        color[st]=0\n        stack=[st]\n        cnt0=1; cnt1=0\n        while stack:\n            x=stack.pop()\n            cx=color[x]\n            nc=1-cx\n            b=start[x]; e=b+deg[x]\n            for k in range(b,e):\n                y=adj[k]\n                if color[y]==-1:\n                    color[y]=nc\n                    if nc==0: cnt0+=1\n                    else: cnt1+=1\n                    stack.append(y)\n        size=cnt0+cnt1\n        if size&1: oddcomp+=1\n        else: P+=cnt0\n    if n&1:\n        print(\"Aoki\" if m&1 else \"Takahashi\")\n    else:\n        if oddcomp==0:\n            print(\"Aoki\" if (P+m)&1 else \"Takahashi\")\n        elif oddcomp==2:\n            print(\"Aoki\")\n        else:\n            print(\"Aoki\" if m&1 else \"Takahashi\")\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 24451,
+        "truncated_calls": null,
+        "passed": false,
+        "passed_before_regrade": false
+      },
+      {
+        "question_id": "3801",
+        "code": "class Solution:\n    def beautifulNumbers(self, l: int, r: int) -> int:\n        maxlen = len(str(r))\n        # dp[k]: dict (sum, prod) -> count  over k-digit sequences of digits 1..9\n        dp = [None] * (maxlen + 1)\n        dp[0] = {(0, 1): 1}\n        for k in range(1, maxlen + 1):\n            cur = {}\n            for (s0, p0), c in dp[k - 1].items():\n                for d in range(1, 10):\n                    key = (s0 + d, p0 * d)\n                    cur[key] = cur.get(key, 0) + c\n            dp[k] = cur\n\n        # good[k]: how many k-digit (digits 1..9) numbers are beautiful\n        good = [0] * (maxlen + 1)\n        for k in range(1, maxlen + 1):\n            tot = 0\n            for (s0, p0), c in dp[k].items():\n                if p0 % s0 == 0:\n                    tot += c\n            good[k] = tot\n\n        # precompute item lists for speed\n        items = [list(dp[k].items()) for k in range(maxlen + 1)]\n\n        def count_no_zero(N, s, n):\n            # count of x in [1,N] with no zero digit\n            total = 0\n            for L in range(1, n):\n                total += 9 ** L\n            for i in range(n):\n                di = int(s[i])\n                hi = di - 1\n                if hi >= 1:\n                    total += min(hi, 9) * (9 ** (n - 1 - i))\n                if di == 0:\n                    return total\n            return total + 1\n\n        def combine(ns, np_, k):\n            if k == 0:\n                return 1 if np_ % ns == 0 else 0\n            tot = 0\n            for (s1, p1), c in items[k]:\n                if (np_ * p1) % (ns + s1) == 0:\n                    tot += c\n            return tot\n\n        def count(N):\n            if N <= 0:\n                return 0\n            s = str(N)\n            n = len(s)\n            nz = count_no_zero(N, s, n)\n            res = N - nz  # all numbers containing a zero digit are beautiful\n            for L in range(1, n):\n                res += good[L]\n            sum0 = 0\n            prod0 = 1\n            broke = False\n            for i in range(n):\n                di = int(s[i])\n                k = n - 1 - i\n                hi = min(di - 1, 9)\n                if hi >= 1:\n                    for d in range(1, hi + 1):\n                        res += combine(sum0 + d, prod0 * d, k)\n                if di == 0:\n                    broke = True\n                    break\n                sum0 += di\n                prod0 *= di\n            if not broke:\n                if prod0 % sum0 == 0:\n                    res += 1\n            return res\n\n        return count(r) - count(l - 1)",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 5036,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "3784",
+        "code": "from typing import List\n\nclass Solution:\n    def longestCommonPrefix(self, words: List[str], k: int) -> List[int]:\n        n = len(words)\n        if n - 1 < k:\n            return [0] * n\n\n        children = [{}]\n        cnt = [0]\n        dep = [0]\n\n        for w in words:\n            node = 0\n            for ch in w:\n                ch_map = children[node]\n                nxt = ch_map.get(ch, -1)\n                if nxt < 0:\n                    nxt = len(cnt)\n                    children.append({})\n                    cnt.append(0)\n                    dep.append(dep[node] + 1)\n                    ch_map[ch] = nxt\n                node = nxt\n                cnt[node] += 1\n\n        maxdep = 0\n        for d in dep:\n            if d > maxdep:\n                maxdep = d\n\n        cntAtDepth = [0] * (maxdep + 2)\n        for v in range(1, len(cnt)):\n            if cnt[v] >= k:\n                cntAtDepth[dep[v]] += 1\n\n        M = 0\n        for d in range(maxdep, 0, -1):\n            if cntAtDepth[d] > 0:\n                M = d\n                break\n\n        ans = [0] * n\n        if M == 0:\n            return ans\n\n        kp1 = k + 1\n        for i in range(n):\n            w = words[i]\n            L = len(w)\n            node = 0\n            A = 0\n            m = 0\n            d = 0\n            for ch in w:\n                node = children[node][ch]\n                c = cnt[node]\n                d += 1\n                if c >= k:\n                    m = d\n                    if c >= kp1:\n                        A = d\n                else:\n                    break\n\n            B = 0\n            if M > L:\n                B = M\n            else:\n                for dd in range(M, 0, -1):\n                    avail = cntAtDepth[dd] - (1 if dd <= m else 0)\n                    if avail > 0:\n                        B = dd\n                        break\n\n            ans[i] = A if A > B else B\n\n        return ans",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 4437,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc397_d",
+        "code": "import sys, math\n\ndef main():\n    N = int(sys.stdin.readline())\n    d = 1\n    while d*d*d < N:\n        if N % d == 0:\n            M = N // d\n            disc = 12*M - 3*d*d\n            if disc >= 0:\n                s = math.isqrt(disc)\n                if s*s == disc:\n                    num = s - 3*d\n                    if num > 0 and num % 6 == 0:\n                        y = num // 6\n                        x = y + d\n                        print(x, y)\n                        return\n        d += 1\n    print(-1)\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 971,
+        "truncated_calls": null,
+        "passed": false,
+        "passed_before_regrade": false
+      },
+      {
+        "question_id": "abc397_f",
+        "code": "import sys\nfrom bisect import bisect_left\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0])\n    A = list(map(int, data[1:1 + n]))\n\n    # prefix distinct\n    P = [0] * (n + 1)\n    seen = bytearray(n + 2)\n    c = 0\n    for i in range(1, n + 1):\n        v = A[i - 1]\n        if not seen[v]:\n            seen[v] = 1\n            c += 1\n        P[i] = c\n\n    # suffix distinct\n    S = [0] * (n + 3)\n    seen2 = bytearray(n + 2)\n    c = 0\n    for k in range(n, 0, -1):\n        v = A[k - 1]\n        if not seen2[v]:\n            seen2[v] = 1\n            c += 1\n        S[k] = c\n\n    # previous occurrence\n    last = [0] * (n + 2)\n    prev = [0] * (n + 2)\n    for i in range(1, n + 1):\n        v = A[i - 1]\n        prev[i] = last[v]\n        last[v] = i\n\n    sz = n + 3\n    Pos = [0] * sz\n    d = [0] * sz\n    nxt = [-1] * sz\n    prv = [-1] * sz\n    f = list(range(sz))\n    cnt = 0\n    head = -1\n    top = -1\n    M = 0\n    T = 0\n    ans = 0\n\n    for j in range(2, n):\n        q = j - 1\n        v = P[q]\n        # push (q, v)\n        while top != -1 and T <= v:\n            f[top] = top + 1\n            pt = prv[top]\n            if pt == -1:\n                top = -1\n                head = -1\n            else:\n                T = T + d[pt]\n                nxt[pt] = -1\n                top = pt\n        idx = cnt\n        cnt += 1\n        Pos[idx] = q\n        nxt[idx] = -1\n        f[idx] = idx\n        if top == -1:\n            prv[idx] = -1\n            head = idx\n            M = v\n        else:\n            prv[idx] = top\n            nxt[top] = idx\n            d[top] = T - v\n        top = idx\n        T = v\n\n        # suffix add +1 starting at position p\n        p = prev[j]\n        if p < 1:\n            p = 1\n        x = bisect_left(Pos, p, 0, cnt)\n        r = x\n        while f[r] != r:\n            r = f[r]\n        while f[x] != r:\n            nx = f[x]\n            f[x] = r\n            x = nx\n        t = r\n        T += 1\n        if t == head:\n            M += 1\n        else:\n            u = prv[t]\n            du = d[u] - 1\n            d[u] = du\n            if du == 0:\n                w = prv[u]\n                f[u] = u + 1\n                if w == -1:\n                    head = t\n                    prv[t] = -1\n                else:\n                    nxt[w] = t\n                    prv[t] = w\n\n        s = M + S[j + 1]\n        if s > ans:\n            ans = s\n\n    sys.stdout.write(str(ans) + \"\\n\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 25290,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc397_g",
+        "code": "import sys\nfrom collections import deque\n\ndef main():\n    data = sys.stdin.read().split()\n    idx = 0\n    N = int(data[idx]); idx+=1\n    M = int(data[idx]); idx+=1\n    K = int(data[idx]); idx+=1\n    edges_in = []\n    for _ in range(M):\n        u = int(data[idx]); idx+=1\n        v = int(data[idx]); idx+=1\n        edges_in.append((u,v))\n\n    INF = 1 << 40\n\n    def mincut(d, limit):\n        # nodes: (v,i) -> (v-1)*d + (i-1), v in 1..N, i in 1..d\n        n = N*d + 2\n        S = N*d\n        T = N*d + 1\n        graph = [[] for _ in range(n)]\n        def add(a, b, c):\n            graph[a].append([b, c, len(graph[b])])\n            graph[b].append([a, 0, len(graph[a])-1])\n        def nid(v, i):\n            return (v-1)*d + (i-1)\n        # monotonicity chains\n        for v in range(1, N+1):\n            for i in range(1, d):\n                add(nid(v,i+1), nid(v,i), INF)\n        # p(1)=0\n        for i in range(1, d+1):\n            add(nid(1,i), T, INF)\n        # p(N)=d\n        for i in range(1, d+1):\n            add(S, nid(N,i), INF)\n        # pairwise\n        for (u,v) in edges_in:\n            for i in range(1, d+1):\n                add(nid(v,i), nid(u,i), 1)\n            for i in range(2, d+1):\n                add(nid(v,i), nid(u,i-1), INF)\n\n        flow = 0\n        level = [0]*n\n        it = [0]*n\n        while True:\n            # bfs\n            for i in range(n):\n                level[i] = -1\n            level[S] = 0\n            q = deque([S])\n            while q:\n                x = q.popleft()\n                for e in graph[x]:\n                    if e[1] > 0 and level[e[0]] < 0:\n                        level[e[0]] = level[x] + 1\n                        q.append(e[0])\n            if level[T] < 0:\n                break\n            for i in range(n):\n                it[i] = 0\n            # dfs (iterative)\n            while True:\n                # find augmenting path\n                stack = [S]\n                path = []\n                found = False\n                while stack:\n                    x = stack[-1]\n                    if x == T:\n                        found = True\n                        break\n                    advanced = False\n                    while it[x] < len(graph[x]):\n                        e = graph[x][it[x]]\n                        if e[1] > 0 and level[e[0]] == level[x] + 1:\n                            stack.append(e[0])\n                            path.append((x, it[x]))\n                            advanced = True\n                            break\n                        it[x] += 1\n                    if not advanced:\n                        level[x] = -1\n                        stack.pop()\n                        if path:\n                            px, pi = path.pop()\n                            it[px] += 1\n                if not found:\n                    break\n                # bottleneck\n                f = INF\n                for (x, ei) in path:\n                    e = graph[x][ei]\n                    if e[1] < f:\n                        f = e[1]\n                for (x, ei) in path:\n                    e = graph[x][ei]\n                    e[1] -= f\n                    graph[e[0]][e[2]][1] += f\n                flow += f\n                if flow > limit:\n                    return flow\n            if flow > limit:\n                return flow\n        return flow\n\n    best = 0\n    for d in range(1, N):\n        c = mincut(d, K)\n        if c <= K:\n            best = d\n    print(best)\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 6757,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc397_e",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0]); k = int(data[1])\n    m = n * k\n    if k == 1:\n        print(\"Yes\")\n        return\n    E = m - 1\n    if E < 0:\n        print(\"Yes\")\n        return\n    # build CSR adjacency\n    deg = [0] * (m + 2)\n    us = [0] * E\n    vs = [0] * E\n    p = 2\n    for i in range(E):\n        u = int(data[p]); v = int(data[p+1])\n        p += 2\n        us[i] = u; vs[i] = v\n        deg[u] += 1; deg[v] += 1\n    start = [0] * (m + 2)\n    s = 0\n    for i in range(1, m + 1):\n        start[i] = s\n        s += deg[i]\n    start[m + 1] = s\n    pos = start[:]\n    adj = [0] * (2 * E)\n    for i in range(E):\n        u = us[i]; v = vs[i]\n        adj[pos[u]] = v; pos[u] += 1\n        adj[pos[v]] = u; pos[v] += 1\n\n    parent = [0] * (m + 1)\n    order = [0] * m\n    order[0] = 1\n    parent[1] = 0\n    head = 0\n    tail = 1\n    visited = bytearray(m + 1)\n    visited[1] = 1\n    while head < tail:\n        v = order[head]; head += 1\n        for j in range(start[v], start[v] + deg[v]):\n            w = adj[j]\n            if not visited[w]:\n                visited[w] = 1\n                parent[w] = v\n                order[tail] = w\n                tail += 1\n\n    cnt = [0] * (m + 1)\n    ssum = [0] * (m + 1)\n\n    ok = True\n    for i in range(m - 1, -1, -1):\n        v = order[i]\n        c = cnt[v]\n        if c > 2:\n            ok = False\n            break\n        if c == 0:\n            r = 1\n        elif c == 1:\n            r = ssum[v] + 1\n        else:\n            if ssum[v] + 1 != k:\n                ok = False\n                break\n            r = 0\n        if r == k:\n            r = 0\n        elif r > k:\n            ok = False\n            break\n        if v == 1:\n            if r != 0:\n                ok = False\n            break\n        if r > 0:\n            pa = parent[v]\n            cnt[pa] += 1\n            ssum[pa] += r\n\n    print(\"Yes\" if ok else \"No\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 2718,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "arc194_c",
+        "code": "import sys\nfrom bisect import bisect_right\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0])\n    A = data[1:1+n]\n    B = data[1+n:1+2*n]\n    C = data[1+2*n:1+3*n]\n    D = []; U = []; Q = []\n    for i in range(n):\n        a = A[i]; b = B[i]; c = int(C[i])\n        if a == b'1':\n            if b == b'0':\n                D.append(c)\n            else:\n                Q.append(c)\n        else:\n            if b == b'1':\n                U.append(c)\n            # a=0,b=0 : nothing\n    m = len(D) + len(U)\n    # F\n    F = 0\n    D.sort(reverse=True)\n    for idx, c in enumerate(D):\n        F += c * idx\n    U.sort(reverse=True)\n    for idx, c in enumerate(U):\n        F += c * (idx + 1)\n    R = D + U\n    R.sort()\n    lr = len(R)\n    pre = [0] * (lr + 1)\n    s = 0\n    for i, c in enumerate(R):\n        s += c\n        pre[i+1] = s\n    Q.sort(reverse=True)\n    r = len(Q)\n    SQ = sum(Q)\n    best = F + m * SQ\n    At = 0; Bt = 0; Pt = 0\n    for t in range(1, r + 1):\n        v = Q[t-1]\n        k = bisect_right(R, v)\n        ms = pre[k] + v * (lr - k)\n        At += v + ms\n        Bt += v * (t - 1)\n        Pt += v\n        rem = SQ - Pt\n        T = F + At + 2 * Bt + m * rem + 2 * t * rem\n        if T < best:\n            best = T\n    sys.stdout.write(str(best) + \"\\n\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 23111,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "arc194_b",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0])\n    P = list(map(int, data[1:1+n]))\n    try:\n        import numpy as np\n    except Exception:\n        np = None\n\n    if np is not None:\n        m = 1\n        while m < n:\n            m <<= 1\n        val = np.empty(m, dtype=np.int64)\n        val[:n] = np.array(P, dtype=np.int64)\n        if m > n:\n            val[n:] = np.arange(n + 1, m + 1, dtype=np.int64)\n        ar = np.arange(m, dtype=np.int64)\n        ordarr = ar.copy()\n        cnt = np.zeros(m, dtype=np.int64)\n        K = m + 2\n        s = 1\n        while s < m:\n            ps = 2 * s\n            pairIdx = ar // ps\n            pair_start = pairIdx * ps\n            key = pairIdx * K + val\n            order = np.argsort(key, kind='stable')\n            ranks = np.empty(m, dtype=np.int64)\n            ranks[order] = ar\n            pos_in_pair = ar - pair_start\n            rank_in_pair = ranks - pair_start\n            right_mask = pos_in_pair >= s\n            add = (rank_in_pair - (pos_in_pair - s)) * right_mask\n            cnt[ordarr] += add\n            ordarr = ordarr[order]\n            val = val[order]\n            s = ps\n        c = cnt[:n]\n        kk = np.arange(1, n + 1, dtype=np.int64)\n        r = c + 1\n        total = int((((kk - 1) * kk) // 2 - ((r - 1) * r) // 2).sum())\n        sys.stdout.write(str(total) + \"\\n\")\n        return\n\n    # fallback: Fenwick tree\n    tree = [0] * (n + 1)\n    total = 0\n    for k in range(1, n + 1):\n        v = P[k - 1]\n        s = 0\n        x = v - 1\n        while x > 0:\n            s += tree[x]\n            x -= x & -x\n        r = s + 1\n        total += (k - 1) * k // 2 - (r - 1) * r // 2\n        x = v\n        while x <= n:\n            tree[x] += 1\n            x += x & -x\n    sys.stdout.write(str(total) + \"\\n\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 23687,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "arc194_e",
+        "code": "import sys, re\nfrom collections import deque\n\ndef normal_form(s, X, Y):\n    blocks = [[0, 0, deque()]]   # [site zero-run len, landed ones, rest runs]\n    for m in re.finditer('0+|1+', s):\n        seg = m.group()\n        L = len(seg)\n        blk = blocks[-1]\n        if seg[0] == '0':\n            rest = blk[2]\n            if rest:\n                last = rest[-1]\n                if last[0] == 0:\n                    nl = last[1] + L\n                    if nl % X:\n                        rest.pop()\n                        blocks.append([nl, 0, deque()])\n                    else:\n                        last[1] = nl\n                else:\n                    if L % X:\n                        blocks.append([L, 0, deque()])\n                    else:\n                        rest.append([0, L])\n            elif blk[1] > 0:\n                if L % X:\n                    blocks.append([L, 0, deque()])\n                else:\n                    rest.append([0, L])\n            elif blk[0] > 0:\n                nz = blk[0] + L\n                if nz % X == 0:\n                    blocks.pop()\n                    blocks[-1][2].append([0, nz])\n                else:\n                    blk[0] = nz\n            else:\n                if L % X:\n                    blocks.append([L, 0, deque()])\n                else:\n                    rest.append([0, L])\n        else:\n            p, rem = divmod(L, Y)\n            if p:\n                z = blk[0]\n                if z >= X:\n                    r = z % X\n                    blk[2].appendleft([0, z - r])\n                    blk[0] = r\n                blk[1] += p * Y\n            if rem:\n                rest = blk[2]\n                if rest:\n                    last = rest[-1]\n                    if last[0] == 1:\n                        last[1] += rem\n                    else:\n                        rest.append([1, rem])\n                elif blk[1] > 0:\n                    blk[1] += rem\n                else:\n                    rest.append([1, rem])\n    parts = []\n    for z, ones, rest in blocks:\n        if z:\n            parts.append('0' * z)\n        if ones:\n            parts.append('1' * ones)\n        for ch, l in rest:\n            parts.append(('0' if ch == 0 else '1') * l)\n    return ''.join(parts)\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0]); X = int(data[1]); Y = int(data[2])\n    S = data[3].decode()\n    T = data[4].decode()\n    if S.count('1') != T.count('1'):\n        print(\"No\")\n        return\n    a = normal_form(S, X, Y)\n    b = normal_form(T, X, Y)\n    print(\"Yes\" if a == b else \"No\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 111254,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "arc194_d",
+        "code": "import sys\ndef main():\n    data = sys.stdin.read().split()\n    n = int(data[0])\n    s = data[1] if len(data) > 1 else \"\"\n    MOD = 998244353\n    maxn = n // 2 + 2\n    fact = [1] * (maxn + 1)\n    for i in range(1, maxn + 1):\n        fact[i] = fact[i - 1] * i % MOD\n    inv_fact = [1] * (maxn + 1)\n    inv_fact[maxn] = pow(fact[maxn], MOD - 2, MOD)\n    for i in range(maxn, 0, -1):\n        inv_fact[i - 1] = inv_fact[i] * i % MOD\n\n    memo = {}      # sorted tuple of child ids -> class id\n    fval = []      # f value per class id\n\n    def calc_f(key):\n        res = fact[len(key)]\n        i = 0\n        L = len(key)\n        while i < L:\n            j = i\n            cur = key[i]\n            while j < L and key[j] == cur:\n                j += 1\n            cnt = j - i\n            res = res * inv_fact[cnt] % MOD\n            res = res * pow(fval[cur], cnt, MOD) % MOD\n            i = j\n        return res\n\n    stack = [[]]\n    for ch in s:\n        if ch == '(':\n            stack.append([])\n        else:\n            childs = stack.pop()\n            childs.sort()\n            key = tuple(childs)\n            idx = memo.get(key)\n            if idx is None:\n                idx = len(fval)\n                memo[key] = idx\n                fval.append(calc_f(key))\n            stack[-1].append(idx)\n\n    top = stack[0]\n    top.sort()\n    print(calc_f(tuple(top)) % MOD)\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 4602,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "3789",
+        "code": "from typing import List\n\nclass Solution:\n    def maxSubarrays(self, n: int, conflictingPairs: List[List[int]]) -> int:\n        byB = [[] for _ in range(n + 1)]\n        for a, b in conflictingPairs:\n            if a > b:\n                a, b = b, a\n            byB[b].append(a)\n        gain = [0] * (n + 2)\n        best1 = 0\n        best2 = 0\n        base = 0\n        for r in range(1, n + 1):\n            for a in byB[r]:\n                if a > best1:\n                    best2 = best1\n                    best1 = a\n                elif a > best2:\n                    best2 = a\n            base += r - best1\n            if best1 > 0:\n                gain[best1] += best1 - best2\n        return base + max(gain)",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 915,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc396_g",
+        "code": "import sys\nimport numpy as np\n\ndef wht(a):\n    n = a.shape[0]\n    h = 1\n    while h < n:\n        b = a.reshape(-1, 2, h)\n        x = b[:, 0, :].copy()\n        y = b[:, 1, :].copy()\n        b[:, 0, :] = x + y\n        b[:, 1, :] = x - y\n        h *= 2\n    return a.reshape(n)\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    H = int(data[0]); W = int(data[1])\n    n = 1 << W\n    rows = data[2:2+H]\n    vals = np.fromiter((int(s, 2) for s in rows), dtype=np.int64, count=H)\n    f = np.bincount(vals, minlength=n).astype(np.int64)\n\n    idx = np.arange(n, dtype=np.int64)\n    pc = np.zeros(n, dtype=np.int64)\n    for b in range(W):\n        pc += (idx >> b) & 1\n    g = np.minimum(pc, W - pc).astype(np.int64)\n\n    fh = wht(f)\n    gh = wht(g)\n    prod = fh * gh\n    res = wht(prod)\n    # divide by n\n    res = res // n\n    print(int(res.min()))\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 1456,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc396_f",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0]); m = int(data[1])\n    A = list(map(int, data[2:2+n]))\n\n    tree = [0] * (m + 2)\n    inv = 0\n    for i in range(n - 1, -1, -1):\n        x = A[i]\n        s = 0\n        j = x\n        while j > 0:\n            s += tree[j]\n            j -= j & -j\n        inv += s\n        j = x + 1\n        while j <= m:\n            tree[j] += 1\n            j += j & -j\n\n    pos = [[] for _ in range(m)]\n    idx = 1\n    for a in A:\n        pos[a].append(idx)\n        idx += 1\n\n    out = []\n    cur = inv\n    for k in range(m):\n        out.append(cur)\n        v = m - 1 - k\n        P = pos[v]\n        t = len(P)\n        if t:\n            s = sum(P)\n            delta = 2 * s - t * (t + 1) + t * (t - n)\n            cur += delta\n\n    sys.stdout.write('\\n'.join(map(str, out)))\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 2099,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc396_e",
+        "code": "import sys\nimport numpy as np\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    idx = 0\n    N = int(data[idx]); idx += 1\n    M = int(data[idx]); idx += 1\n\n    par = list(range(N))\n    w = [0]*N\n    size = [1]*N\n\n    def find(x):\n        root = x\n        acc = 0\n        while par[root] != root:\n            acc ^= w[root]\n            root = par[root]\n        p = x\n        d = 0\n        while par[p] != p:\n            nxt = par[p]\n            nd = d ^ w[p]\n            par[p] = root\n            w[p] = acc ^ d\n            p = nxt\n            d = nd\n        return root, acc\n\n    ok = True\n    for _ in range(M):\n        x = int(data[idx])-1; idx += 1\n        y = int(data[idx])-1; idx += 1\n        z = int(data[idx]); idx += 1\n        if not ok:\n            continue\n        rx, ax = find(x)\n        ry, ay = find(y)\n        if rx == ry:\n            if (ax ^ ay) != z:\n                ok = False\n        else:\n            val = z ^ ax ^ ay\n            if size[rx] > size[ry]:\n                rx, ry = ry, rx\n            # attach rx to ry, A_rx ^ A_ry = val (symmetric)\n            par[rx] = ry\n            w[rx] = val\n            size[ry] += size[rx]\n\n    if not ok:\n        sys.stdout.write(\"-1\\n\")\n        return\n\n    roots = [0]*N\n    pots = [0]*N\n    for i in range(N):\n        r, a = find(i)\n        roots[i] = r\n        pots[i] = a\n\n    roots_np = np.array(roots, dtype=np.int64)\n    pots_np = np.array(pots, dtype=np.int64)\n\n    sizes = np.bincount(roots_np, minlength=N).astype(np.int64)\n    rootval = np.zeros(N, dtype=np.int64)\n\n    for b in range(30):\n        bits = ((pots_np >> b) & 1).astype(np.float64)\n        c = np.bincount(roots_np, weights=bits, minlength=N)\n        c = np.rint(c).astype(np.int64)\n        sel = (c * 2) > sizes\n        rootval[sel] |= (1 << b)\n\n    A = pots_np ^ rootval[roots_np]\n    sys.stdout.write(' '.join(map(str, A.tolist())))\n    sys.stdout.write('\\n')\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 2406,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": false
+      },
+      {
+        "question_id": "3770",
+        "code": "from bisect import bisect_right\n\n\nclass Solution:\n    def generateString(self, str1: str, str2: str) -> str:\n        n = len(str1)\n        m = len(str2)\n        L = n + m - 1\n        s2 = str2.encode()\n\n        # Z-function of str2\n        z = [0] * m\n        if m > 0:\n            z[0] = m\n            l, r = 0, 0\n            for i in range(1, m):\n                if i < r:\n                    z[i] = min(r - i, z[i - l])\n                while i + z[i] < m and s2[z[i]] == s2[i + z[i]]:\n                    z[i] += 1\n                if i + z[i] > r:\n                    l, r = i, i + z[i]\n\n        tpos = [i for i in range(n) if str1[i] == 'T']\n\n        # check consistency of overlapping T placements (adjacent pairs suffice)\n        for k in range(1, len(tpos)):\n            d = tpos[k] - tpos[k - 1]\n            if d < m:\n                if z[d] != m - d:\n                    return \"\"\n\n        word = bytearray(b'a' * L)\n        fixed = bytearray(L)\n        ONES = b'\\x01' * m\n        for i in tpos:\n            word[i:i + m] = s2\n            fixed[i:i + m] = ONES\n\n        freelist = [i for i in range(L) if not fixed[i]]\n\n        bchar = ord('b')\n        for i in range(n):\n            if str1[i] == 'F':\n                if word[i:i + m] == s2:\n                    idx = bisect_right(freelist, i + m - 1) - 1\n                    if idx < 0 or freelist[idx] < i:\n                        return \"\"\n                    j = freelist.pop(idx)\n                    word[j] = bchar\n\n        return word.decode()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 4255,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "3783",
+        "code": "from typing import List\n\nclass Solution:\n    def permute(self, n: int, k: int) -> List[int]:\n        fact = [1] * (n + 2)\n        for i in range(1, n + 2):\n            fact[i] = fact[i - 1] * i\n\n        used = [False] * (n + 1)\n        o = (n + 1) // 2  # odds available\n        e = n // 2        # evens available\n        res = []\n        prev_par = None\n\n        for pos in range(n):\n            chosen = False\n            for v in range(1, n + 1):\n                if used[v]:\n                    continue\n                par = v % 2\n                if prev_par is not None and par == prev_par:\n                    continue\n                no = o - (1 if par == 1 else 0)\n                ne = e - (1 if par == 0 else 0)\n                m = n - pos - 1\n                startpar = 1 - par\n                s = (m + 1) // 2\n                t = m // 2\n                if startpar == 1:\n                    need_odd, need_even = s, t\n                else:\n                    need_even, need_odd = s, t\n                if need_odd != no or need_even != ne:\n                    c = 0\n                else:\n                    c = fact[no] * fact[ne]\n                if k > c:\n                    k -= c\n                else:\n                    used[v] = True\n                    res.append(v)\n                    o, e = no, ne\n                    prev_par = par\n                    chosen = True\n                    break\n            if not chosen:\n                return []\n        return res",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 1795,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc395_f",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0]); x = int(data[1])\n    U = [0]*n\n    D = [0]*n\n    idx = 2\n    total = 0\n    for i in range(n):\n        u = int(data[idx]); d = int(data[idx+1]); idx += 2\n        U[i] = u; D[i] = d\n        total += u + d\n    # A[i] = min_j (U[j] + |i-j|*x)\n    A = U[:]\n    best = A[0]\n    for i in range(1, n):\n        best = best + x\n        if A[i] < best:\n            best = A[i]\n        A[i] = best\n    best = A[n-1]\n    for i in range(n-2, -1, -1):\n        best = best + x\n        if A[i] < best:\n            best = A[i]\n        A[i] = best\n    H = min(D[i] + A[i] for i in range(n))\n    if H < 0:\n        H = 0\n    print(total - n*H)\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 2310,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc395_e",
+        "code": "import sys, heapq\nfrom itertools import accumulate\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0]); m = int(data[1]); x = int(data[2])\n    us = [0]*m\n    vs = [0]*m\n    degf = [0]*(n+1)\n    degb = [0]*(n+1)\n    idx = 3\n    for i in range(m):\n        u = int(data[idx]) - 1; v = int(data[idx+1]) - 1\n        idx += 2\n        us[i] = u; vs[i] = v\n        degf[u] += 1\n        degb[v] += 1\n    # CSR forward\n    startf = [0]*(n+1)\n    acc = 0\n    for i in range(n):\n        startf[i] = acc\n        acc += degf[i]\n    startf[n] = acc\n    startb = [0]*(n+1)\n    acc = 0\n    for i in range(n):\n        startb[i] = acc\n        acc += degb[i]\n    startb[n] = acc\n\n    adjf = [0]*m\n    adjb = [0]*m\n    posf = startf[:]  # length n+1\n    posb = startb[:]\n    for i in range(m):\n        u = us[i]; v = vs[i]\n        adjf[posf[u]] = v\n        posf[u] += 1\n        adjb[posb[v]] = u\n        posb[v] += 1\n\n    INF = float('inf')\n    N2 = 2*n\n    dist = [INF]*N2\n    dist[0] = 0\n    heap = [(0, 0)]\n    push = heapq.heappush\n    pop = heapq.heappop\n    target0 = n-1\n    target1 = n-1+n\n    ans = INF\n    while heap:\n        d, u = pop(heap)\n        if d > dist[u]:\n            continue\n        if u == target0 or u == target1:\n            ans = d\n            break\n        if u < n:\n            v = u\n            base = 0\n            s = startf[v]; e = startf[v+1]\n            adj = adjf\n            other = u + n\n        else:\n            v = u - n\n            base = n\n            s = startb[v]; e = startb[v+1]\n            adj = adjb\n            other = u - n\n        nd = d + 1\n        for k in range(s, e):\n            w = adj[k] + base\n            if nd < dist[w]:\n                dist[w] = nd\n                push(heap, (nd, w))\n        nd2 = d + x\n        if nd2 < dist[other]:\n            dist[other] = nd2\n            push(heap, (nd2, other))\n    if ans == INF:\n        ans = min(dist[target0], dist[target1])\n    sys.stdout.write(str(ans) + \"\\n\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 1499,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "arc193_b",
+        "code": "import sys\nimport numpy as np\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0])\n    s = data[1][:n]\n    MOD = 998244353\n\n    arr = np.frombuffer(s, dtype=np.uint8)\n    one = (arr == 49)\n\n    a = np.where(one, 3, 2).astype(np.int64)\n    b = one.astype(np.int64)\n    c = np.ones(n, dtype=np.int64)\n    d = np.ones(n, dtype=np.int64)\n\n    m = n\n    while m > 1:\n        if m & 1:\n            a = np.concatenate((a, np.array([1], dtype=np.int64)))\n            b = np.concatenate((b, np.array([0], dtype=np.int64)))\n            c = np.concatenate((c, np.array([0], dtype=np.int64)))\n            d = np.concatenate((d, np.array([1], dtype=np.int64)))\n            m += 1\n        a1 = a[0::2]; b1 = b[0::2]; c1 = c[0::2]; d1 = d[0::2]\n        a2 = a[1::2]; b2 = b[1::2]; c2 = c[1::2]; d2 = d[1::2]\n        na = (a1 * a2 + b1 * c2) % MOD\n        nb = (a1 * b2 + b1 * d2) % MOD\n        nc = (c1 * a2 + d1 * c2) % MOD\n        nd = (c1 * b2 + d1 * d2) % MOD\n        a, b, c, d = na, nb, nc, nd\n        m //= 2\n\n    ans = (int(a[0]) + int(d[0]) - 2) % MOD\n    sys.stdout.write(str(ans) + \"\\n\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 15054,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "arc193_a",
+        "code": "import sys\nimport numpy as np\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    try:\n        arr = np.array(data).astype(np.int64)\n    except Exception:\n        arr = np.fromiter(map(int, data), dtype=np.int64, count=len(data))\n    N = int(arr[0])\n    W = arr[1:1+N].copy()\n    p = 1 + N\n    LR = arr[p:p+2*N].reshape(N, 2)\n    L = LR[:, 0].copy(); R = LR[:, 1].copy()\n    p += 2*N\n    Q = int(arr[p]); p += 1\n    ST = arr[p:p+2*Q].reshape(Q, 2)\n    sq = ST[:, 0] - 1; tq = ST[:, 1] - 1\n\n    Rl = int(R.min()); Lm = int(L.max())\n    if Rl >= Lm:\n        sys.stdout.write('\\n'.join(['-1']*Q) + '\\n'); return\n\n    M = 2*N\n    INF = 1 << 40\n    INF32 = 2147483647\n\n    minR_at = np.full(M+2, INF, dtype=np.int64)\n    ordR = np.lexsort((W, R)); Rs = R[ordR]\n    fm = np.ones(N, dtype=bool); fm[1:] = Rs[1:] != Rs[:-1]\n    minR_at[Rs[fm]] = W[ordR][fm]\n    g = np.minimum.accumulate(minR_at)\n\n    minL_at = np.full(M+3, INF, dtype=np.int64)\n    ordL = np.lexsort((W, L)); Lsr = L[ordL]\n    fm2 = np.ones(N, dtype=bool); fm2[1:] = Lsr[1:] != Lsr[:-1]\n    minL_at[Lsr[fm2]] = W[ordL][fm2]\n    suf = np.minimum.accumulate(minL_at[::-1])[::-1].copy()\n\n    A = np.minimum(minL_at[1:M+1] + g[0:M], INF32).astype(np.int32)\n    K = 1\n    while (1 << K) <= M:\n        K += 1\n    SP = np.full((K, M), INF32, dtype=np.int32)\n    SP[0] = A\n    for k in range(1, K):\n        h = 1 << (k-1); ln = M - (1 << k) + 1\n        if ln <= 0:\n            break\n        SP[k, :ln] = np.minimum(SP[k-1, :ln], SP[k-1, h:h+ln])\n    LOG = np.zeros(M+2, dtype=np.int64)\n    idx = np.arange(1, M+2, dtype=np.float64)\n    LOG[1:] = np.frexp(idx)[1] - 1\n\n    noniso = (L > Rl) | (R < Lm)\n\n    Lsq = L[sq]; Rsq = R[sq]; Wsq = W[sq]\n    Ltq = L[tq]; Rtq = R[tq]; Wtq = W[tq]\n    base = Wsq + Wtq\n\n    best = np.where((Rsq < Ltq) | (Rtq < Lsq), np.int64(0), np.int64(INF))\n    c2 = np.minimum(g[np.minimum(Lsq, Ltq) - 1], suf[np.maximum(Rsq, Rtq) + 1])\n    best = np.minimum(best, c2)\n\n    def f3(Rs_, Lt_):\n        lo = Rs_ + 1\n        hi = Lt_\n        valid = lo <= hi\n        aa = np.where(valid, lo - 1, 0)\n        bb = np.where(valid, hi - 1, 0)\n        k = LOG[bb - aa + 1]\n        p1 = SP[k, aa]\n        p2 = SP[k, bb - (1 << k) + 1]\n        r = np.minimum(p1, p2).astype(np.int64)\n        r = np.where(valid & (r < INF32), r, np.int64(INF))\n        r2 = np.minimum(suf[np.maximum(Rs_, Lt_) + 1] + g[Lt_ - 1], INF)\n        return np.minimum(r, r2)\n\n    best = np.minimum(best, f3(Rsq, Ltq))\n    best = np.minimum(best, f3(Rtq, Lsq))\n\n    ans = base + best\n    bad = (~noniso[sq]) | (~noniso[tq]) | (best >= INF)\n    ans = np.where(bad, np.int64(-1), ans)\n\n    sys.stdout.write('\\n'.join(map(str, ans.tolist())) + '\\n')\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 34712,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "arc193_d",
+        "code": "import sys\n\ndef check(a, b, m, r, par):\n    t = 0\n    lim = m - r\n    bj = b[0]\n    for j in range(1, r):\n        g = b[j] - bj\n        while t <= lim:\n            d = a[t+1] - a[t]\n            if d > g:\n                break\n            if d == g and ((a[t] ^ bj) & 1) == par:\n                break\n            t += 1\n        else:\n            return False\n        t += 1\n        lim += 1\n        bj = b[j]\n    return True\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    T = int(data[0]); p = 1; out = []\n    try:\n        import numpy as np\n        use_np = True\n    except Exception:\n        use_np = False\n    for _ in range(T):\n        n = int(data[p]); A = data[p+1]; B = data[p+2]; p += 3\n        if use_np and n >= 512:\n            an = np.flatnonzero(np.frombuffer(A, dtype=np.uint8) == 49)\n            bn = np.flatnonzero(np.frombuffer(B, dtype=np.uint8) == 49)\n            m = int(an.size); r = int(bn.size)\n            if r > m:\n                out.append(-1); continue\n            al = int(bn[0]) - int(an[0]); be = int(bn[-1]) - int(an[-1])\n            M = al if al >= 0 else -al\n            v = be if be >= 0 else -be\n            if v > M: M = v\n            if r == 1:\n                out.append(M); continue\n            par = M & 1\n            if m == r:\n                dA = an[1:] - an[:-1]\n                gB = bn[1:] - bn[:-1]\n                gt = dA > gB\n                eq = dA == gB\n                pm = (an[:-1] ^ bn[:-1]) & 1\n                if bool((gt | (eq & (pm == par))).all()):\n                    out.append(M)\n                elif bool((gt | (eq & (pm == (par ^ 1)))).all()):\n                    out.append(M+1)\n                else:\n                    out.append(-1)\n                continue\n            a = an.tolist(); b = bn.tolist()\n        else:\n            a = [i for i, c in enumerate(A) if c == 49]\n            b = [i for i, c in enumerate(B) if c == 49]\n            m = len(a); r = len(b)\n            if r > m:\n                out.append(-1); continue\n            al = b[0]-a[0]; be = b[-1]-a[-1]\n            M = al if al >= 0 else -al\n            v = be if be >= 0 else -be\n            if v > M: M = v\n            if r == 1:\n                out.append(M); continue\n            par = M & 1\n        if check(a, b, m, r, par):\n            out.append(M)\n        elif check(a, b, m, r, par ^ 1):\n            out.append(M + 1)\n        else:\n            out.append(-1)\n    sys.stdout.write('\\n'.join(map(str, out)))\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 124876,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "3781",
+        "code": "from typing import List\nfrom bisect import bisect_left\n\ntry:\n    import numpy as _np\n    _HAVE_NP = True\nexcept Exception:\n    _HAVE_NP = False\n\n\nclass Solution:\n    def maxDistance(self, side: int, points: List[List[int]], k: int) -> int:\n        s = side\n        pos = []\n        for x, y in points:\n            if y == 0:\n                t = x\n            elif x == s:\n                t = s + y\n            elif y == s:\n                t = 3 * s - x\n            else:\n                t = 4 * s - y\n            pos.append(t)\n        pos.sort()\n        n = len(pos)\n        total = 4 * s\n        P = pos + [t + total for t in pos]\n        INF = 2 * n\n\n        if _HAVE_NP:\n            Parr = _np.array(P, dtype=_np.int64)\n            Phead = Parr[:n]\n\n            def check(d):\n                nxt = _np.empty(2 * n + 1, dtype=_np.int64)\n                v = _np.searchsorted(Parr, Phead + d, side='left')\n                nxt[:n] = v\n                nxt[n:2 * n] = _np.where(v < n, v + n, INF)\n                nxt[2 * n] = INF\n                e = k - 1\n                res = None\n                base = nxt\n                while e:\n                    if e & 1:\n                        res = base.copy() if res is None else base[res]\n                    e >>= 1\n                    if e:\n                        base = base[base]\n                j = res[:n]\n                mask = j < INF\n                if not mask.any():\n                    return False\n                jj = _np.where(mask, j, 0)\n                return bool(((Parr[jj] - Phead <= total - d) & mask).any())\n        else:\n            def check(d):\n                nxt = [INF] * (2 * n + 1)\n                j = 0\n                m2 = 2 * n\n                for i in range(n):\n                    target = P[i] + d\n                    if j <= i:\n                        j = i + 1\n                    while j < m2 and P[j] < target:\n                        j += 1\n                    nxt[i] = j\n                for i in range(n, m2):\n                    v = nxt[i - n]\n                    nxt[i] = v + n if v < n else INF\n                nxt[m2] = INF\n                e = k - 1\n                res = None\n                base = nxt\n                while e:\n                    if e & 1:\n                        res = list(base) if res is None else [base[x] for x in res]\n                    e >>= 1\n                    if e:\n                        base = [base[x] for x in base]\n                lim = total - d\n                for i in range(n):\n                    jj = res[i]\n                    if jj < INF and P[jj] - P[i] <= lim:\n                        return True\n                return False\n\n        lo, hi = 1, total // k\n        ans = 0\n        while lo <= hi:\n            mid = (lo + hi) // 2\n            if check(mid):\n                ans = mid\n                lo = mid + 1\n            else:\n                hi = mid - 1\n        return ans",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 15566,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc394_f",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0])\n    if n < 5:\n        # need at least a degree-4 vertex -> at least 5 vertices\n        print(-1)\n        return\n    deg = [0]*(n+1)\n    ea = [0]*(n-1)\n    eb = [0]*(n-1)\n    idx = 1\n    for i in range(n-1):\n        a = int(data[idx]); b = int(data[idx+1]); idx += 2\n        ea[i] = a; eb[i] = b\n        deg[a] += 1\n        deg[b] += 1\n\n    core = [False]*(n+1)\n    any_core = False\n    for v in range(1, n+1):\n        if deg[v] >= 4:\n            core[v] = True\n            any_core = True\n    if not any_core:\n        print(-1)\n        return\n\n    # build CSR adjacency restricted to core-core edges\n    cnt = [0]*(n+2)\n    for i in range(n-1):\n        a = ea[i]; b = eb[i]\n        if core[a] and core[b]:\n            cnt[a] += 1\n            cnt[b] += 1\n    start = [0]*(n+2)\n    s = 0\n    for v in range(1, n+1):\n        start[v] = s\n        s += cnt[v]\n    start[n+1] = s\n    pos = start[:]\n    adjarr = [0]*s\n    for i in range(n-1):\n        a = ea[i]; b = eb[i]\n        if core[a] and core[b]:\n            adjarr[pos[a]] = b; pos[a] += 1\n            adjarr[pos[b]] = a; pos[b] += 1\n\n    visited = [False]*(n+1)\n    par = [0]*(n+1)\n    f3 = [0]*(n+1)\n    best = 0\n\n    for root in range(1, n+1):\n        if not core[root] or visited[root]:\n            continue\n        visited[root] = True\n        par[root] = 0\n        stack = [root]\n        order = []\n        while stack:\n            v = stack.pop()\n            order.append(v)\n            for j in range(start[v], start[v]+cnt[v]):\n                u = adjarr[j]\n                if not visited[u]:\n                    visited[u] = True\n                    par[u] = v\n                    stack.append(u)\n        for i in range(len(order)-1, -1, -1):\n            v = order[i]\n            p = par[v]\n            vals = []\n            for j in range(start[v], start[v]+cnt[v]):\n                u = adjarr[j]\n                if u != p:\n                    vals.append(f3[u])\n            if len(vals) > 1:\n                vals.sort(reverse=True)\n            t3 = 1\n            t4 = 1\n            k = len(vals)\n            if k > 0:\n                lim3 = 3 if k > 3 else k\n                sm = 0\n                for x in range(lim3):\n                    sm += vals[x]\n                t3 = 1 + sm\n                if k > 3:\n                    t4 = 1 + sm + vals[3]\n                else:\n                    t4 = t3\n            f3[v] = t3\n            if t4 > best:\n                best = t4\n\n    print(3*best + 2)\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 4134,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc394_g",
+        "code": "import sys\nimport numpy as np\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    H = int(data[0]); W = int(data[1])\n    N = H * W\n    F = np.fromiter(map(int, data[2:2+N]), dtype=np.int64, count=N)\n    pos = 2 + N\n    Q = int(data[pos]); pos += 1\n    qa = np.fromiter(map(int, data[pos:pos+6*Q]), dtype=np.int64, count=6*Q).reshape(Q, 6)\n\n    Fg = F.reshape(H, W)\n    ids = np.arange(N, dtype=np.int64).reshape(H, W)\n    eus = []; evs = []; ews = []\n    if W > 1:\n        eus.append(ids[:, :-1].ravel()); evs.append(ids[:, 1:].ravel())\n        ews.append(np.minimum(Fg[:, :-1], Fg[:, 1:]).ravel())\n    if H > 1:\n        eus.append(ids[:-1, :].ravel()); evs.append(ids[1:, :].ravel())\n        ews.append(np.minimum(Fg[:-1, :], Fg[1:, :]).ravel())\n\n    T0 = 2 * N - 1\n    par = list(range(T0))\n    val = [0] * T0\n    fl = F.tolist()\n    for i in range(N):\n        val[i] = fl[i]\n    dsu = list(range(T0))\n    nid = N\n    if eus:\n        eu = np.concatenate(eus); ev = np.concatenate(evs); ew = np.concatenate(ews)\n        order = np.argsort(-ew)\n        eul = eu[order].tolist(); evl = ev[order].tolist(); ewl = ew[order].tolist()\n        cnt = 0; need = N - 1\n        for wi, x, y in zip(ewl, eul, evl):\n            while dsu[x] != x:\n                dsu[x] = dsu[dsu[x]]; x = dsu[x]\n            while dsu[y] != y:\n                dsu[y] = dsu[dsu[y]]; y = dsu[y]\n            if x != y:\n                dsu[x] = nid; dsu[y] = nid\n                par[x] = nid; par[y] = nid\n                val[nid] = wi\n                nid += 1; cnt += 1\n                if cnt == need:\n                    break\n    T = nid\n    root = T - 1\n    par = par[:T]; val = val[:T]\n    par[root] = root\n    par_np = np.array(par, dtype=np.int32)\n    val_np = np.array(val, dtype=np.int64)\n    K = max(1, T.bit_length())\n    ups = [par_np]\n    for k in range(1, K):\n        ups.append(ups[-1][ups[-1]])\n\n    cur = np.arange(T, dtype=np.int32)\n    d = np.zeros(T, dtype=np.int64)\n    for k in range(K - 1, -1, -1):\n        nxt = ups[k][cur]\n        mask = nxt != root\n        d += mask * (1 << k)\n        cur = np.where(mask, nxt, cur).astype(np.int32)\n    d += (cur != root)\n    depth = d\n\n    A = qa[:, 0]; B = qa[:, 1]; Y = qa[:, 2]; C = qa[:, 3]; D = qa[:, 4]; Z = qa[:, 5]\n    u = ((A - 1) * W + (B - 1)).astype(np.int32)\n    v = ((C - 1) * W + (D - 1)).astype(np.int32)\n    du = depth[u]; dv = depth[v]\n    sw = dv > du\n    uq = np.where(sw, v, u).astype(np.int32)\n    vq = np.where(sw, u, v).astype(np.int32)\n    diff = np.abs(du - dv)\n    mx = int(diff.max()) if Q > 0 else 0\n    for k in range(K):\n        if (1 << k) > mx:\n            break\n        sel = ((diff >> k) & 1).astype(bool)\n        if sel.any():\n            uq[sel] = ups[k][uq[sel]]\n    for k in range(K - 1, -1, -1):\n        a = ups[k][uq]; b = ups[k][vq]\n        m = a != b\n        uq = np.where(m, a, uq).astype(np.int32)\n        vq = np.where(m, b, vq).astype(np.int32)\n    lca = np.where(uq == vq, uq, ups[0][uq])\n    M = val_np[lca]\n    ans = np.maximum(np.abs(Y - Z), Y + Z - 2 * M)\n    out = '\\n'.join(map(str, ans.tolist()))\n    sys.stdout.write(out + '\\n')\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 16495,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc394_e",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.read().split()\n    n = int(data[0])\n    g = data[1:1+n]\n\n    inlists = [[[] for _ in range(26)] for _ in range(n)]\n    outmask = [[0]*26 for _ in range(n)]\n    for i in range(n):\n        row = g[i]\n        for j in range(n):\n            ch = row[j]\n            if ch != '-':\n                c = ord(ch) - 97\n                inlists[j][c].append(i)\n                outmask[i][c] |= (1 << j)\n\n    inpairs = [[(c, l) for c, l in enumerate(inlists[i]) if l] for i in range(n)]\n\n    NEG = -1\n    dist = [[-1]*n for _ in range(n)]\n    vis = [0]*n  # vis[i] bitmask of visited j for source i\n\n    queue = []\n    for i in range(n):\n        dist[i][i] = 0\n        vis[i] |= (1 << i)\n        queue.append((i, i))\n    for i in range(n):\n        row = g[i]\n        di = dist[i]\n        for j in range(n):\n            if row[j] != '-' and di[j] == -1:\n                di[j] = 1\n                vis[i] |= (1 << j)\n                queue.append((i, j))\n\n    head = 0\n    qappend = queue.append\n    while head < len(queue):\n        i, j = queue[head]\n        head += 1\n        nd = dist[i][j] + 2\n        om_j = outmask[j]\n        for c, plist in inpairs[i]:\n            om = om_j[c]\n            if not om:\n                continue\n            for p in plist:\n                nq = om & ~vis[p]\n                if nq:\n                    vis[p] |= nq\n                    dp = dist[p]\n                    while nq:\n                        b = nq & (-nq)\n                        q = b.bit_length() - 1\n                        dp[q] = nd\n                        qappend((p, q))\n                        nq ^= b\n\n    out = []\n    for i in range(n):\n        out.append(' '.join(map(str, dist[i])))\n    sys.stdout.write('\\n'.join(out) + '\\n')\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 3155,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "3733",
+        "code": "from typing import List\n\nclass Solution:\n    def lenOfVDiagonal(self, grid: List[List[int]]) -> int:\n        n = len(grid)\n        m = len(grid[0])\n        dirs = [(-1, -1), (-1, 1), (1, 1), (1, -1)]\n\n        # A[d][i][j]: length of segment starting at (i,j) going in direction d, no turn allowed\n        A = []\n        for d in range(4):\n            di, dj = dirs[d]\n            a = [[1] * m for _ in range(n)]\n            rows = list(range(n - 1, -1, -1)) if di == 1 else list(range(n))\n            cols = list(range(m - 1, -1, -1)) if dj == 1 else list(range(m))\n            for i in rows:\n                ni = i + di\n                if 0 <= ni < n:\n                    gi = grid[i]\n                    gni = grid[ni]\n                    ai = a[i]\n                    ani = a[ni]\n                    for j in cols:\n                        nj = j + dj\n                        if 0 <= nj < m:\n                            nv = 0 if gi[j] == 2 else 2\n                            if gni[nj] == nv:\n                                ai[j] = 1 + ani[nj]\n            A.append(a)\n\n        ans = 0\n        for d in range(4):\n            di, dj = dirs[d]\n            nd = (d + 1) % 4\n            ndi, ndj = dirs[nd]\n            And = A[nd]\n            b = [[1] * m for _ in range(n)]\n            rows = list(range(n - 1, -1, -1)) if di == 1 else list(range(n))\n            cols = list(range(m - 1, -1, -1)) if dj == 1 else list(range(m))\n            for i in rows:\n                gi = grid[i]\n                bi = b[i]\n                si = i + di\n                ti = i + ndi\n                gsi = grid[si] if 0 <= si < n else None\n                bsi = b[si] if 0 <= si < n else None\n                gti = grid[ti] if 0 <= ti < n else None\n                ati = And[ti] if 0 <= ti < n else None\n                for j in cols:\n                    cur = gi[j]\n                    nv = 0 if cur == 2 else 2\n                    best = 1\n                    if gsi is not None:\n                        sj = j + dj\n                        if 0 <= sj < m and gsi[sj] == nv:\n                            best = 1 + bsi[sj]\n                    if gti is not None:\n                        tj = j + ndj\n                        if 0 <= tj < m and gti[tj] == nv:\n                            v = 1 + ati[tj]\n                            if v > best:\n                                best = v\n                    bi[j] = best\n                    if cur == 1 and best > ans:\n                        ans = best\n        return ans",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 3713,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "3692",
+        "code": "from bisect import bisect_right, bisect_left\n\nclass Solution:\n    def shortestMatchingSubstring(self, s: str, p: str) -> int:\n        n = len(s)\n        i1 = p.index('*')\n        i2 = p.index('*', i1 + 1)\n        a = p[:i1]\n        b = p[i1+1:i2]\n        c = p[i2+1:]\n\n        def find_all(text, pat):\n            m = len(pat)\n            if m == 0:\n                return list(range(len(text) + 1))\n            if m > len(text):\n                return []\n            # KMP\n            fail = [0] * m\n            k = 0\n            for i in range(1, m):\n                ch = pat[i]\n                while k > 0 and pat[k] != ch:\n                    k = fail[k-1]\n                if pat[k] == ch:\n                    k += 1\n                fail[i] = k\n            res = []\n            k = 0\n            for i, ch in enumerate(text):\n                while k > 0 and pat[k] != ch:\n                    k = fail[k-1]\n                if pat[k] == ch:\n                    k += 1\n                if k == m:\n                    res.append(i - m + 1)\n                    k = fail[k-1]\n            return res\n\n        A = find_all(s, a)\n        B = find_all(s, b)\n        C = find_all(s, c)\n\n        if not A or not B or not C:\n            return -1\n\n        la, lb, lc = len(a), len(b), len(c)\n        best = -1\n\n        for j in B:\n            # largest i in A with i <= j - la\n            lim = j - la\n            if lim < 0:\n                continue\n            idx = bisect_right(A, lim) - 1\n            if idx < 0:\n                continue\n            i = A[idx]\n            # smallest k in C with k >= j + lb\n            need = j + lb\n            idx2 = bisect_left(C, need)\n            if idx2 >= len(C):\n                break\n            k = C[idx2]\n            length = k + lc - i\n            if best == -1 or length < best:\n                best = length\n\n        return best",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 1698,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc393_f",
+        "code": "import sys\nfrom bisect import bisect_left, bisect_right, insort\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    pos = 0\n    n = int(data[pos]); pos += 1\n    q = int(data[pos]); pos += 1\n    A = data[pos:pos+n]\n    A = [int(x) for x in A]\n    pos += n\n    queries = []\n    for i in range(q):\n        r = int(data[pos]); pos += 1\n        x = int(data[pos]); pos += 1\n        queries.append((r, x, i))\n    queries.sort()\n    ans = [0]*q\n    tails = []\n    idx = 0\n    cur = 0  # number of elements processed\n    for (r, x, qi) in queries:\n        while cur < r:\n            a = A[cur]\n            p = bisect_left(tails, a)\n            if p == len(tails):\n                tails.append(a)\n            else:\n                tails[p] = a\n            cur += 1\n        ans[qi] = bisect_right(tails, x)\n    sys.stdout.write('\\n'.join(map(str, ans)) + '\\n')\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 1087,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc393_e",
+        "code": "import sys\nimport numpy as np\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0]); k = int(data[1])\n    A = np.fromiter(map(int, data[2:2+n]), dtype=np.int64, count=n)\n    M = int(A.max())\n\n    f = np.bincount(A, minlength=M + 1).astype(np.int32)\n\n    # primes up to M\n    if M >= 2:\n        sieve = np.ones(M + 1, dtype=bool)\n        sieve[0:2] = False\n        i = 2\n        while i * i <= M:\n            if sieve[i]:\n                sieve[i*i::i] = False\n            i += 1\n        primes = np.flatnonzero(sieve).tolist()\n    else:\n        primes = []\n\n    F = f\n    # sum over multiples: F[d] = sum_{d | m} f[m]\n    for p in primes:\n        t = p\n        while 2 * t <= M:\n            L = M // t\n            if t * t <= M:\n                F[1:L+1] += F[t::t].copy()\n            else:\n                F[1:L+1] += F[t::t]\n            t = t * t\n    F[1] = n  # steps affecting only index 1 were skipped\n\n    ar = np.arange(M + 1, dtype=np.int32)\n    G = np.where(F >= k, ar, 0).astype(np.int32)\n    G[0] = 0\n    del ar, F, f\n\n    # max over divisors: G[v] = max_{d | v} val[d]\n    for p in primes:\n        t = p\n        while 2 * t <= M:\n            L = M // t\n            if t * t <= M:\n                np.maximum(G[t::t], G[1:L+1].copy(), out=G[t::t])\n            else:\n                np.maximum(G[t::t], G[1:L+1], out=G[t::t])\n            t = t * t\n    np.maximum(G, 1, out=G)  # d=1 is always valid\n\n    res = G[A]\n    out = '\\n'.join(map(str, res.tolist()))\n    sys.stdout.write(out + '\\n')\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 15028,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc393_d",
+        "code": "import sys\ndef main():\n    data=sys.stdin.read().split()\n    n=int(data[0]); s=data[1]\n    b=[]\n    c=0\n    for i,ch in enumerate(s):\n        if ch=='1':\n            b.append(i-c)\n            c+=1\n    m=b[len(b)//2]\n    print(sum(abs(x-m) for x in b))\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 171,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "arc192_e",
+        "code": "import sys\nimport numpy as np\n\ndef main():\n    data = sys.stdin.read().split()\n    W, H, L, R, D, U = map(int, data[:6])\n    MOD = 998244353\n    N = W + H + 10\n\n    fact = np.arange(N + 1, dtype=np.int64)\n    fact[0] = 1\n    n = N + 1\n    d = 1\n    while d < n:\n        fact[d:] = fact[d:] * fact[:n - d] % MOD\n        d <<= 1\n\n    invf = np.empty(N + 1, dtype=np.int64)\n    invf[0] = pow(int(fact[N]), MOD - 2, MOD)\n    invf[1:] = np.arange(N, 0, -1, dtype=np.int64)\n    d = 1\n    while d < n:\n        invf[d:] = invf[d:] * invf[:n - d] % MOD\n        d <<= 1\n    invf = invf[::-1].copy()\n\n    def C(nn, kk):\n        if nn < 0 or kk < 0 or kk > nn:\n            return 0\n        return int(fact[nn]) * int(invf[kk]) % MOD * int(invf[nn - kk]) % MOD\n\n    def Phi(a, b):\n        if a < 0 or b < 0:\n            return 0\n        return (C(a + b + 4, a + 2) - (a + b + 4)) % MOD\n\n    def Frect(a, b):\n        if a < 0 or b < 0:\n            return 0\n        return (Phi(a, b) - (a + 1) * (b + 1)) % MOD\n\n    def Qlow(Wc, Hc, Lc, Rc, Dc):\n        # paths touching band x in [Lc,Rc], all band points with y < Dc\n        if Dc <= 0:\n            return 0\n        K = Wc - Rc\n        part1 = (Phi(Rc, Dc - 1) - Phi(Lc - 1, Dc - 1) - (Rc - Lc + 1) * Dc) % MOD\n        part2 = 0\n        if K > 0:\n            A = fact[Rc + 2: Rc + Dc + 2] * invf[1: Dc + 1] % MOD\n            A = A * int(invf[Rc + 1]) % MOD\n            Bf = fact[K + Hc - Dc + 2: K + Hc + 2][::-1]\n            Bi = invf[Hc - Dc + 2: Hc + 2][::-1]\n            B = Bf * Bi % MOD\n            B = B * int(invf[K]) % MOD\n            P = (A - 1) * (B - 1) % MOD\n            part2 = int(P.sum() % MOD)\n        return (part1 + part2) % MOD\n\n    ans = 0\n    ans += Frect(L - 1, H)          # entirely left of band\n    ans += Frect(W - R - 1, H)      # entirely right of band\n    ans += Qlow(W, H, L, R, D)      # touching band, below hole\n    ans += Qlow(W, H, W - R, W - L, H - U)  # touching band, above hole (symmetry)\n    print(ans % MOD)\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 30066,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "arc192_b",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0])\n    a = data[1:1+n]\n    e = 0\n    for x in a:\n        if int(x) % 2 == 0:\n            e += 1\n    if n == 1:\n        print(\"Fennec\")\n    elif n == 2:\n        print(\"Snuke\")\n    elif n == 3:\n        print(\"Snuke\" if e == 3 else \"Fennec\")\n    else:\n        print(\"Fennec\" if (n + e) % 2 == 1 else \"Snuke\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 16298,
+        "truncated_calls": null,
+        "passed": false,
+        "passed_before_regrade": false
+      },
+      {
+        "question_id": "arc192_d",
+        "code": "import sys\nimport numpy as np\n\nM = 998244353\n\ndef build_pow_vec(q, n):\n    arr = np.empty(n + 1, dtype=np.int64)\n    arr[0] = 1\n    cur = 1\n    while cur <= n:\n        m = min(cur, n + 1 - cur)\n        arr[cur:cur + m] = arr[0:m] * (pow(int(q), cur, M)) % M\n        cur += m\n    return arr\n\ndef solve_prime(p, a):\n    L = len(a)\n    S = sum(a)\n    n = S + 1\n    P = build_pow_vec(p % M, S)\n    dp = np.zeros(n, dtype=np.int64)\n    dp[0] = 1\n    cache = {}\n    i = 1\n    while i <= L:\n        ai = a[i - 1]\n        if ai == 0:\n            j = i\n            while j <= L and a[j - 1] == 0:\n                j += 1\n            k = j - i\n            V = cache.get(k)\n            if V is None:\n                q = pow(p, k, M)\n                V = build_pow_vec(q, S)\n                cache[k] = V\n            dp = dp * V % M\n            i = j\n        else:\n            new = np.zeros(n, dtype=np.int64)\n            if ai < n:\n                new[ai:n] = dp[0:n - ai] * P[ai:n] % M\n                new[0:n - ai] = (new[0:n - ai] + dp[ai:n] * P[0:n - ai]) % M\n            extra = 0\n            lim = min(ai, n)\n            for u in range(lim):\n                dv = int(dp[u])\n                if dv:\n                    extra = (extra + dv * pow(p, (ai - u) * i, M)) % M\n            new[0] = (new[0] + extra) % M\n            dp = new\n            i += 1\n    return int(dp.sum() % M)\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    N = int(data[0])\n    A = [int(x) for x in data[1:N]]\n    m = len(A)\n    # smallest prime factor sieve up to 1000\n    LIM = 1001\n    spf = list(range(LIM))\n    d = 2\n    while d * d < LIM:\n        if spf[d] == d:\n            for x in range(d * d, LIM, d):\n                if spf[x] == x:\n                    spf[x] = d\n        d += 1\n\n    expmap = {}\n    for idx in range(m):\n        v = A[idx]\n        while v > 1:\n            pr = spf[v]\n            c = 0\n            while v % pr == 0:\n                v //= pr\n                c += 1\n            lst = expmap.get(pr)\n            if lst is None:\n                lst = [0] * m\n                expmap[pr] = lst\n            lst[idx] = c\n\n    ans = 1\n    for p, a in expmap.items():\n        ans = ans * solve_prime(p, a) % M\n    sys.stdout.write(str(ans % M) + \"\\n\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 10305,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "3696",
+        "code": "class Solution:\n    def countSubstrings(self, s: str) -> int:\n        n = len(s)\n        ans = 0\n        # prefix sums mod 3 and mod 9\n        cnt3 = [0]*3\n        cnt9 = [0]*9\n        cnt3[0] = 1\n        cnt9[0] = 1\n        sum3 = 0\n        sum9 = 0\n        # residues mod 7 for all suffixes ending at current position\n        cnt7 = [0]*7\n        \n        digits = [ord(c)-48 for c in s]\n        \n        for j in range(n):\n            d = digits[j]\n            # update mod7 residue counts\n            new7 = [0]*7\n            for r in range(7):\n                c = cnt7[r]\n                if c:\n                    new7[(10*r + d) % 7] += c\n            new7[d % 7] += 1\n            cnt7 = new7\n            \n            # update prefix sums\n            sum3 = (sum3 + d) % 3\n            sum9 = (sum9 + d) % 9\n            \n            if d == 0:\n                pass\n            elif d == 1 or d == 2 or d == 5:\n                ans += j + 1\n            elif d == 3:\n                ans += cnt3[sum3]\n            elif d == 6:\n                ans += cnt3[sum3]\n            elif d == 9:\n                ans += cnt9[sum9]\n            elif d == 4:\n                ans += 1\n                if j >= 1 and digits[j-1] % 2 == 0:\n                    ans += j\n            elif d == 8:\n                ans += 1\n                if j >= 1:\n                    a = digits[j-1]\n                    if (2*a) % 8 == 0:\n                        ans += 1\n                if j >= 2:\n                    a = digits[j-1]\n                    b = digits[j-2]\n                    if (4*b + 2*a) % 8 == 0:\n                        ans += j - 1\n            elif d == 7:\n                ans += cnt7[0]\n            \n            cnt3[sum3] += 1\n            cnt9[sum9] += 1\n        \n        return ans",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 2543,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "3762",
+        "code": "from typing import List\n\nclass Solution:\n    def maxScore(self, points: List[int], m: int) -> int:\n        n = len(points)\n        \n        def feasible(t):\n            if t == 0:\n                return True\n            moves = 0\n            carry = 0\n            for p in points:\n                moves += 1\n                if moves > m:\n                    return False\n                v = carry + 1\n                # k = ceil(t/p)\n                k = -(-t // p)\n                if v < k:\n                    extra = k - v\n                    moves += 2 * extra\n                    if moves > m:\n                        return False\n                    carry = extra\n                else:\n                    carry = 0\n            return moves <= m\n        \n        lo, hi = 0, m * min(points)\n        while lo < hi:\n            mid = (lo + hi + 1) // 2\n            if feasible(mid):\n                lo = mid\n            else:\n                hi = mid - 1\n        return lo",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 1636,
+        "truncated_calls": null,
+        "passed": false,
+        "passed_before_regrade": false
+      },
+      {
+        "question_id": "abc392_g",
+        "code": "import sys\nimport numpy as np\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0])\n    if n < 3:\n        print(0)\n        return\n    s = np.array(data[1:1+n], dtype=np.int64)\n    M = int(s.max()) + 1\n    a = np.zeros(M, dtype=np.float64)\n    a[s] = 1.0\n    need = 2 * (M - 1) + 1\n    size = 1\n    while size < need:\n        size <<= 1\n    fa = np.fft.rfft(a, size)\n    conv = np.fft.irfft(fa * fa, size)\n    counts = np.rint(conv[:need]).astype(np.int64)\n    total = int(counts[2 * s].sum()) - n\n    print(total // 2)\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 1526,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc392_f",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0])\n    P = list(map(int, data[1:1 + n]))\n\n    size = 1\n    while size < n:\n        size <<= 1\n    depth = size.bit_length() - 1\n\n    # Build tree of free-slot counts; L[v] = number of free leaves in left child of v\n    try:\n        import numpy as np\n        arr = np.zeros(2 * size, dtype=np.int64)\n        arr[size:size + n] = 1\n        lo = size\n        while lo > 1:\n            arr[lo >> 1:lo] = arr[lo:lo + lo:2] + arr[lo + 1:lo + lo:2]\n            lo >>= 1\n        L = arr[0:2 * size:2].tolist()   # L[v] = arr[2v]\n    except Exception:\n        sm = [0] * (2 * size)\n        for i in range(n):\n            sm[size + i] = 1\n        for v in range(size - 1, 0, -1):\n            sm[v] = sm[2 * v] + sm[2 * v + 1]\n        L = sm[0::2]\n\n    ans = [0] * n\n\n    level = (\"        c=L[node]\\n\"\n             \"        if k<=c:\\n\"\n             \"            L[node]=c-1\\n\"\n             \"            node+=node\\n\"\n             \"        else:\\n\"\n             \"            k-=c\\n\"\n             \"            node+=node+1\\n\")\n\n    src = (\"def run(L,P,ans,size,n):\\n\"\n           \"    i=n\\n\"\n           \"    for k in reversed(P):\\n\"\n           \"        node=1\\n\"\n           + level * depth +\n           \"        ans[node-size]=i\\n\"\n           \"        i-=1\\n\")\n\n    ns = {}\n    exec(src, ns)\n    ns['run'](L, P, ans, size, n)\n\n    out = ' '.join(map(str, ans))\n    sys.stdout.write(out + \"\\n\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 17511,
+        "truncated_calls": null,
+        "passed": false,
+        "passed_before_regrade": false
+      },
+      {
+        "question_id": "3697",
+        "code": "from math import gcd\nfrom typing import List\n\nclass Solution:\n    def minimumIncrements(self, nums: List[int], target: List[int]) -> int:\n        k = len(target)\n        n = len(nums)\n        INF = float('inf')\n\n        # lcm for every non-empty subset\n        lcms = [1] * (1 << k)\n        for s in range(1, 1 << k):\n            L = 1\n            for i in range(k):\n                if (s >> i) & 1:\n                    t = target[i]\n                    L = L // gcd(L, t) * t\n            lcms[s] = L\n\n        # top-4 cheapest candidates per subset\n        cands = [None] * (1 << k)\n        for s in range(1, 1 << k):\n            L = lcms[s]\n            lst = []\n            thr = INF\n            for i, x in enumerate(nums):\n                c = (-x) % L\n                if c < thr:\n                    lst.append((c, i))\n                    if len(lst) > 8:\n                        lst.sort()\n                        lst = lst[:4]\n                        thr = lst[-1][0]\n                        if thr == 0:\n                            break\n            lst.sort()\n            cands[s] = lst[:4]\n\n        # enumerate set partitions of {0..k-1} as lists of masks\n        partitions = []\n\n        def gen(i, groups):\n            if i == k:\n                partitions.append(list(groups))\n                return\n            bit = 1 << i\n            for j in range(len(groups)):\n                groups[j] |= bit\n                gen(i + 1, groups)\n                groups[j] ^= bit\n            groups.append(bit)\n            gen(i + 1, groups)\n            groups.pop()\n\n        gen(0, [])\n\n        best_global = INF\n\n        for part in partitions:\n            # order groups by their cheapest candidate descending? simple DFS with pruning\n            m = len(part)\n            best = INF\n\n            def rec(j, used, cur):\n                nonlocal best\n                if cur >= best:\n                    return\n                if j == m:\n                    best = cur\n                    return\n                for c, idx in cands[part[j]]:\n                    if idx in used:\n                        continue\n                    if cur + c >= best:\n                        break\n                    used.add(idx)\n                    rec(j + 1, used, cur + c)\n                    used.discard(idx)\n\n            rec(0, set(), 0)\n            if best < best_global:\n                best_global = best\n\n        return int(best_global)",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 5054,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "3701",
+        "code": "import numpy as np\n\nclass Solution:\n    def minCostGoodCaption(self, caption: str) -> str:\n        n = len(caption)\n        if n < 3:\n            return \"\"\n        INF = 10**9\n        s = (np.frombuffer(caption.encode(), dtype=np.uint8).astype(np.int32) - 97)\n        alph = np.arange(26, dtype=np.int32).reshape(26, 1)\n        absmat = np.abs(alph - s.reshape(1, n)).astype(np.int32)\n        PS = np.zeros((26, n + 1), dtype=np.int32)\n        np.cumsum(absmat, axis=1, dtype=np.int32, out=PS[:, 1:])\n        del absmat\n\n        mlist = {}\n        for L in (3, 4, 5):\n            cnt = n + 1 - L\n            mlist[L] = (PS[:, L:] - PS[:, :cnt]).min(axis=0).tolist() if cnt > 0 else []\n\n        A = [INF] * (n + 1)\n        A[n] = 0\n        for i in range(n - 1, -1, -1):\n            if n - i < 3:\n                A[i] = INF\n                continue\n            best = INF\n            for L in (3, 4, 5):\n                j = i + L\n                if j > n:\n                    break\n                if j != n and n - j < 3:\n                    continue\n                aj = A[j]\n                if aj >= INF:\n                    continue\n                v = mlist[L][i] + aj\n                if v < best:\n                    best = v\n            A[i] = best\n        Aarr = np.array(A, dtype=np.int32)\n\n        dp2 = np.full((26, n + 1), INF, dtype=np.int32)\n        for L in (3, 4, 5):\n            cnt = n + 1 - L\n            if cnt <= 0:\n                continue\n            cand = PS[:, L:] - PS[:, :cnt] + Aarr[L:]\n            for bad in (n - 1 - L, n - 2 - L):\n                if 0 <= bad < cnt:\n                    cand[:, bad] = INF\n            np.minimum(dp2[:, :cnt], cand, out=dp2[:, :cnt])\n            del cand\n        np.minimum(dp2, INF, out=dp2)\n\n        cols = np.arange(n + 1)\n        idx = dp2.argmin(axis=0)\n        m1 = dp2[idx, cols].copy()\n        tmp = dp2.copy()\n        tmp[idx, cols] = INF\n        m2 = tmp.min(axis=0)\n        del tmp\n        BE = np.repeat(m1.reshape(1, n + 1), 26, axis=0)\n        BE[idx, cols] = m2\n        BE[:, n] = 0\n        np.minimum(BE, INF, out=BE)\n\n        M = PS + BE\n        del BE\n        SM = np.minimum.accumulate(M[:, ::-1], axis=1)[:, ::-1]\n        del M\n        D3 = SM - PS\n        del SM, PS\n\n        g0 = int(dp2[:, 0].min())\n        if g0 >= INF:\n            return \"\"\n        col0 = dp2[:, 0].tolist()\n        c = col0.index(g0)\n\n        dp2T = np.ascontiguousarray(dp2.T)\n        del dp2\n        D3T = np.ascontiguousarray(D3.T)\n        del D3\n\n        res = [c, c, c]\n        i = 3\n        sl = s.tolist()\n        while i < n:\n            rowD = D3T[i]\n            R = int(rowD[c])\n            col = dp2T[i].tolist()\n            cont_ok = (abs(c - sl[i]) + int(D3T[i + 1][c]) == R)\n            chosen = -1\n            for c2 in range(26):\n                if c2 == c:\n                    if cont_ok:\n                        chosen = c2\n                        break\n                    continue\n                if col[c2] == R:\n                    chosen = c2\n                    break\n            if chosen == -1:\n                chosen = c\n            if chosen == c:\n                res.append(c)\n                i += 1\n            else:\n                c = chosen\n                res.append(c)\n                res.append(c)\n                res.append(c)\n                i += 3\n\n        return bytes(bytearray([97 + x for x in res])).decode()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 24489,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc391_f",
+        "code": "import sys, heapq\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0]); K = int(data[1])\n    A = sorted(map(int, data[2:2+n]), reverse=True)\n    B = sorted(map(int, data[2+n:2+2*n]), reverse=True)\n    C = sorted(map(int, data[2+2*n:2+3*n]), reverse=True)\n    L = min(n, K)\n    A = A[:L]; B = B[:L]; C = C[:L]\n    L2 = L * L\n\n    a0 = A[0]; b0 = B[0]; c0 = C[0]\n    heap = [(-(a0*b0 + b0*c0 + c0*a0), 0)]\n    seen = set()\n    seen.add(0)\n    push = heapq.heappush\n    pop = heapq.heappop\n\n    ans = 0\n    cnt = 0\n    Lm1 = L - 1\n    while True:\n        nv, code = pop(heap)\n        cnt += 1\n        if cnt == K:\n            ans = -nv\n            break\n        i = code // L2\n        r = code - i * L2\n        j = r // L\n        l = r - j * L\n        ai = A[i]; bj = B[j]; cl = C[l]\n        if i < Lm1:\n            nc = code + L2\n            if nc not in seen:\n                seen.add(nc)\n                x = A[i+1]\n                push(heap, (-(x*bj + bj*cl + cl*x), nc))\n        if j < Lm1:\n            nc = code + L\n            if nc not in seen:\n                seen.add(nc)\n                y = B[j+1]\n                push(heap, (-(ai*y + y*cl + cl*ai), nc))\n        if l < Lm1:\n            nc = code + 1\n            if nc not in seen:\n                seen.add(nc)\n                z = C[l+1]\n                push(heap, (-(ai*bj + bj*z + z*ai), nc))\n\n    sys.stdout.write(str(ans) + \"\\n\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 2196,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc391_e",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.read().split()\n    N = int(data[0])\n    A = data[1].strip()\n    vals = [1 if ch == '1' else 0 for ch in A]\n    costs = [1] * len(vals)\n    L = len(vals)\n    while L > 1:\n        nv = [0] * (L // 3)\n        nc = [0] * (L // 3)\n        j = 0\n        for i in range(0, L, 3):\n            a = vals[i]; b = vals[i+1]; c = vals[i+2]\n            s = a + b + c\n            ca = costs[i]; cb = costs[i+1]; cc = costs[i+2]\n            if s == 0:\n                v = 0\n                # all three equal, sum two smallest\n                x, y, z = ca, cb, cc\n                m1 = x if x < y else y\n                m2 = y if x < y else x\n                if z < m1:\n                    cost = z + m1\n                elif z < m2:\n                    cost = m1 + z\n                else:\n                    cost = m1 + m2\n            elif s == 3:\n                v = 1\n                x, y, z = ca, cb, cc\n                m1 = x if x < y else y\n                m2 = y if x < y else x\n                if z < m1:\n                    cost = z + m1\n                elif z < m2:\n                    cost = m1 + z\n                else:\n                    cost = m1 + m2\n            elif s == 1:\n                v = 0\n                # two children with value 0, pick min cost\n                if a == 0:\n                    if b == 0:\n                        cost = ca if ca < cb else cb\n                    else:\n                        cost = ca if ca < cc else cc\n                else:\n                    cost = cb if cb < cc else cc\n            else:  # s == 2\n                v = 1\n                if a == 1:\n                    if b == 1:\n                        cost = ca if ca < cb else cb\n                    else:\n                        cost = ca if ca < cc else cc\n                else:\n                    cost = cb if cb < cc else cc\n            nv[j] = v\n            nc[j] = cost\n            j += 1\n        vals = nv\n        costs = nc\n        L = len(vals)\n    print(costs[0])\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 1434,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc391_g",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.read().split()\n    N = int(data[0]); M = int(data[1]); S = data[2].strip()\n    MOD = 998244353\n    size = 1 << N\n    chars = sorted(set(S))\n    weights = [1]*len(chars)\n    other = 26 - len(chars)\n    charlist = list(chars)\n    if other > 0:\n        charlist.append(None)  # represents any char not in S\n        weights.append(other)\n\n    # precompute transitions\n    trans = [[0]*len(charlist) for _ in range(size)]\n    for mask in range(size):\n        # decode dp\n        dp = [0]*(N+1)\n        for j in range(1, N+1):\n            dp[j] = dp[j-1] + ((mask >> (j-1)) & 1)\n        for ci, c in enumerate(charlist):\n            nd = [0]*(N+1)\n            for j in range(1, N+1):\n                v = nd[j-1]\n                if dp[j] > v:\n                    v = dp[j]\n                if c is not None and S[j-1] == c:\n                    if dp[j-1] + 1 > v:\n                        v = dp[j-1] + 1\n                nd[j] = v\n            nm = 0\n            for j in range(1, N+1):\n                if nd[j] - nd[j-1] == 1:\n                    nm |= (1 << (j-1))\n            trans[mask][ci] = nm\n\n    cur = [0]*size\n    cur[0] = 1\n    nchars = len(charlist)\n    for _ in range(M):\n        nxt = [0]*size\n        for mask in range(size):\n            v = cur[mask]\n            if v == 0:\n                continue\n            tr = trans[mask]\n            for ci in range(nchars):\n                nxt[tr[ci]] = (nxt[tr[ci]] + v * weights[ci]) % MOD\n        cur = nxt\n\n    ans = [0]*(N+1)\n    for mask in range(size):\n        if cur[mask]:\n            k = bin(mask).count('1')\n            ans[k] = (ans[k] + cur[mask]) % MOD\n    print(' '.join(map(str, ans)))\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 1349,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "arc191_d",
+        "code": "",
+        "status": "truncated",
+        "finish_reason": "length",
+        "completion_tokens": 128000,
+        "truncated_calls": null,
+        "passed": false
+      },
+      {
+        "question_id": "arc191_c",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    t = int(data[0])\n    out = []\n    for i in range(1, t + 1):\n        n = int(data[i])\n        out.append(f\"{n+1} {n*n}\")\n    sys.stdout.write(\"\\n\".join(out) + \"\\n\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 896,
+        "truncated_calls": null,
+        "passed": false,
+        "passed_before_regrade": false
+      },
+      {
+        "question_id": "abc390_e",
+        "code": "import sys\nimport bisect\n\ndef main():\n    import numpy as np\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0]); X = int(data[1])\n    items = [[], [], []]\n    for i in range(n):\n        v = int(data[2 + 3*i]); a = int(data[3 + 3*i]); c = int(data[4 + 3*i])\n        items[v-1].append((c, a))\n    f = []\n    for v in range(3):\n        dp = np.zeros(X + 1, dtype=np.int64)\n        for c, a in items[v]:\n            if c > X:\n                continue\n            np.maximum(dp[c:], dp[:X+1-c] + a, out=dp[c:])\n        f.append(dp.tolist())\n\n    hi = min(f[0][X], f[1][X], f[2][X])\n    lo = 0\n\n    def feasible(T):\n        if T == 0:\n            return True\n        total = 0\n        for v in range(3):\n            idx = bisect.bisect_left(f[v], T)\n            if idx > X:\n                return False\n            total += idx\n            if total > X:\n                return False\n        return total <= X\n\n    while lo < hi:\n        mid = (lo + hi + 1) // 2\n        if feasible(mid):\n            lo = mid\n        else:\n            hi = mid - 1\n    print(lo)\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 2270,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc390_g",
+        "code": "import sys\ndef main():\n    data = sys.stdin.read().split()\n    N = int(data[0])\n    MOD = 998244353\n    groups = []\n    L = 1\n    while 10**(L-1) <= N:\n        lo = 10**(L-1); hi = min(N, 10**L - 1)\n        c = hi - lo + 1\n        w = pow(10, L, MOD)\n        s = (lo + hi) * c // 2 % MOD\n        groups.append((c, w, s))\n        L += 1\n    m = len(groups)\n    # D(z) = prod (1 + w z)\n    D = [1]\n    for (c, w, s) in groups:\n        nd = [0]*(len(D)+1)\n        for i, v in enumerate(D):\n            nd[i] = (nd[i] + v) % MOD\n            nd[i+1] = (nd[i+1] + v*w) % MOD\n        D = nd\n    R = [0]*m\n    for i in range(m):\n        Q = [1]\n        for j in range(m):\n            if j == i: continue\n            w2 = groups[j][1]\n            nq = [0]*(len(Q)+1)\n            for k, v in enumerate(Q):\n                nq[k] = (nq[k] + v) % MOD\n                nq[k+1] = (nq[k+1] + v*w2) % MOD\n            Q = nq\n        fac = groups[i][0] % MOD * groups[i][1] % MOD\n        for k, v in enumerate(Q):\n            R[k] = (R[k] + fac*v) % MOD\n    # inverses\n    inv = [0]*(N+2)\n    if N+2 > 1:\n        inv_len = N+2\n        inv[1] = 1\n        for i in range(2, inv_len):\n            inv[i] = (MOD - (MOD//i) * inv[MOD % i]) % MOD\n    OFF = 8\n    arr = [0]*(N+1+OFF)\n    arr[OFF] = 1\n    d = D; r = R\n    d1 = d[1:] + [0]*8\n    r2 = r + [0]*8\n    for n in range(N):\n        base = OFF + n\n        s = 0\n        for t in range(m):\n            s += (r2[t] - d1[t]*(n-t)) * arr[base-t]\n        arr[base+1] = (s % MOD) * inv[n+1] % MOD\n    p = arr[OFF:]\n    fact = [1]*(N+1)\n    for i in range(1, N+1):\n        fact[i] = fact[i-1]*i % MOD\n    coef = [fact[k]*fact[N-1-k] % MOD for k in range(N)]\n    ans = 0\n    for (c, w, sx) in groups:\n        q = 1\n        acc = coef[0]\n        for k in range(1, N):\n            q = (p[k] - w*q) % MOD\n            acc = (acc + coef[k]*q) % MOD\n        ans = (ans + sx*acc) % MOD\n    sys.stdout.write(str(ans % MOD) + \"\\n\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 10844,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc390_f",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0])\n    A = data[1:1+n]\n    pos = [[] for _ in range(n + 2)]\n    for i in range(n):\n        pos[int(A[i])].append(i + 1)\n    T = n * (n + 1) // 2\n\n    def gapsum(lst):\n        s = 0\n        prev = 0\n        for q in lst:\n            g = q - prev - 1\n            if g:\n                s += g * (g + 1) // 2\n            prev = q\n        g = n - prev\n        if g:\n            s += g * (g + 1) // 2\n        return s\n\n    C = [0] * (n + 2)\n    for v in range(1, n + 1):\n        if pos[v]:\n            C[v] = T - gapsum(pos[v])\n\n    ans = 0\n    for v in range(1, n + 1):\n        pv = pos[v]\n        if not pv:\n            continue\n        if v == 1 or not pos[v - 1]:\n            ans += T - gapsum(pv)\n        else:\n            merged = sorted(pv + pos[v - 1])\n            ans += T - C[v - 1] - gapsum(merged)\n\n    sys.stdout.write(str(ans) + \"\\n\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 3010,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "3725",
+        "code": "from typing import List\n\nclass Solution:\n    def minMaxSubarraySum(self, nums: List[int], k: int) -> int:\n        n = len(nums)\n        K = k + 1\n\n        def cnt(a, b):\n            t = K - b\n            if t < 0:\n                t = 0\n            if t > a:\n                t = a\n            total = t * b\n            u = a if a < K - 1 else K - 1\n            if u > t:\n                total += ((K - t - 1) + (K - u)) * (u - t) // 2\n            return total\n\n        def maxsum(arr):\n            # previous strictly greater\n            L = [-1] * n\n            stack = []\n            for i in range(n):\n                ai = arr[i]\n                while stack and arr[stack[-1]] <= ai:\n                    stack.pop()\n                L[i] = stack[-1] if stack else -1\n                stack.append(i)\n            # next greater or equal\n            R = [n] * n\n            stack = []\n            for i in range(n - 1, -1, -1):\n                ai = arr[i]\n                while stack and arr[stack[-1]] < ai:\n                    stack.pop()\n                R[i] = stack[-1] if stack else n\n                stack.append(i)\n            total = 0\n            for i in range(n):\n                a = i - L[i]\n                b = R[i] - i\n                c = cnt(a, b)\n                if c:\n                    total += arr[i] * c\n            return total\n\n        neg = [-x for x in nums]\n        return maxsum(nums) - maxsum(neg)",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 3552,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "3687",
+        "code": "from typing import List\nimport sys\n\nclass Solution:\n    def longestSpecialPath(self, edges: List[List[int]], nums: List[int]) -> List[int]:\n        n = len(nums)\n        adj = [[] for _ in range(n)]\n        for u, v, w in edges:\n            adj[u].append((v, w))\n            adj[v].append((u, w))\n\n        maxv = max(nums) if nums else 0\n        lastOcc = [-1] * (maxv + 2)\n\n        dists = []  # dists[d] = distance from root to node at depth d\n        start = 0\n\n        best_len = 0\n        best_cnt = 1\n\n        # events: (type, a, b, c) ; type 0 = enter (node, parent, weight), type 1 = exit (node, saved_prev, saved_start)\n        stack = [(0, 0, -1, 0)]\n        while stack:\n            t = stack.pop()\n            if t[0] == 1:\n                _, node, sp, ss = t\n                dists.pop()\n                lastOcc[nums[node]] = sp\n                start = ss\n            else:\n                _, node, par, w = t\n                d = len(dists)\n                dist = (dists[-1] + w) if dists else 0\n                dists.append(dist)\n                v = nums[node]\n                saved_prev = lastOcc[v]\n                saved_start = start\n                if saved_prev >= start:\n                    start = saved_prev + 1\n                lastOcc[v] = d\n\n                L = dist - dists[start]\n                cnt = d - start + 1\n                if L > best_len or (L == best_len and cnt < best_cnt):\n                    best_len = L\n                    best_cnt = cnt\n\n                stack.append((1, node, saved_prev, saved_start))\n                for (nb, nw) in adj[node]:\n                    if nb != par:\n                        stack.append((0, nb, node, nw))\n\n        return [best_len, best_cnt]",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 1896,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "3739",
+        "code": "class Solution:\n    def distanceSum(self, m: int, n: int, k: int) -> int:\n        MOD = 10**9 + 7\n        total_cells = m * n\n\n        # Sum of Manhattan distances over all unordered pairs of distinct cells\n        S = n * n * (m * (m * m - 1) // 6) + m * m * (n * (n * n - 1) // 6)\n        S %= MOD\n\n        # binomial(total_cells - 2, k - 2)\n        N = total_cells\n        fact = [1] * (N + 1)\n        for i in range(1, N + 1):\n            fact[i] = fact[i - 1] * i % MOD\n        inv_fact = [1] * (N + 1)\n        inv_fact[N] = pow(fact[N], MOD - 2, MOD)\n        for i in range(N, 0, -1):\n            inv_fact[i - 1] = inv_fact[i] * i % MOD\n\n        def comb(a, b):\n            if b < 0 or b > a or a < 0:\n                return 0\n            return fact[a] * inv_fact[b] % MOD * inv_fact[a - b] % MOD\n\n        return S * comb(N - 2, k - 2) % MOD",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 1489,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc389_g",
+        "code": "import sys\nimport numpy as np\n\ndef main():\n    data = sys.stdin.read().split()\n    N = int(data[0]); P = int(data[1])\n    maxdeg = N*(N-1)//2\n    L = maxdeg + 1\n    half = N//2\n\n    # Pascal triangle mod P up to row maxdeg\n    Cm = [[1]]\n    prev = [1]\n    for i in range(1, maxdeg+1):\n        row = [1]*(i+1)\n        for j in range(1, i):\n            row[j] = (prev[j-1] + prev[j]) % P\n        row[0] = 1 % P\n        row[i] = 1 % P\n        Cm.append(row)\n        prev = row\n    if maxdeg >= 0:\n        Cm[0] = [1 % P]\n\n    def convmod(a, b):\n        r1 = np.convolve(a >> 15, b)\n        r0 = np.convolve(a & 32767, b)\n        res = ((r1 % P) << 15) + r0\n        res %= P\n        return res[:L]\n\n    # G[(p,q)] = ((1+x)^p - 1)^q * (1+x)^{C(q,2)}\n    G = {}\n    for p in range(1, N):\n        base = np.array([0] + [Cm[p][i] for i in range(1, p+1)], dtype=np.int64)\n        cur = np.array([1 % P], dtype=np.int64)\n        for q in range(1, N-p+1):\n            cur = convmod(cur, base)\n            w = q*(q-1)//2\n            if w == 0:\n                G[(p, q)] = cur.copy()\n            else:\n                onep = np.array(Cm[w], dtype=np.int64)\n                G[(p, q)] = convmod(cur, onep)\n\n    levels = [dict() for _ in range(N+1)]\n    levels[1][(0, 1, 1, 0)] = np.array([1 % P], dtype=np.int64)\n\n    for used in range(1, N):\n        cur_level = levels[used]\n        if not cur_level:\n            continue\n        rem = N - used\n        for key, poly in cur_level.items():\n            par, last, e, o = key\n            for q in range(1, rem+1):\n                npar = 1 - par\n                if npar == 1:\n                    ne, no = e, o + q\n                else:\n                    ne, no = e + q, o\n                if ne > half or no > half:\n                    continue\n                c = Cm[rem][q]\n                if c == 0:\n                    continue\n                g = G[(last, q)]\n                newpoly = convmod(poly, g)\n                if c != 1:\n                    newpoly = (newpoly * c) % P\n                nk = (npar, q, ne, no)\n                d = levels[used+q]\n                if nk in d:\n                    curp = d[nk]\n                    if len(curp) < len(newpoly):\n                        tmp = np.zeros(len(newpoly), dtype=np.int64)\n                        tmp[:len(curp)] = curp\n                        curp = tmp\n                    curp[:len(newpoly)] = (curp[:len(newpoly)] + newpoly) % P\n                    d[nk] = curp\n                else:\n                    d[nk] = newpoly\n\n    ans = np.zeros(L, dtype=np.int64)\n    for poly in levels[N].values():\n        ans[:len(poly)] = (ans[:len(poly)] + poly) % P\n\n    out = ans[N-1:L].tolist()\n    sys.stdout.write(' '.join(map(str, out)) + '\\n')\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 13474,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc389_f",
+        "code": "import sys\nimport numpy as np\nfrom bisect import bisect_left\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0])\n    V = 500000\n    arr = list(range(V + 1))\n    arr.append(V)          # index V+1 holds value V\n    B = 2048\n    blocks = [arr[i:i + B] for i in range(0, V + 2, B)]\n    del arr\n    nb = len(blocks)\n    cum = np.zeros(nb + 1, dtype=np.int64)\n    np.cumsum(np.fromiter((len(b) for b in blocks), np.int64, nb), out=cum[1:])\n    LIMIT = 3 * B\n\n    LR = list(map(int, data[1:1 + 2 * n]))\n    it = iter(LR)\n    for L, R in zip(it, it):\n        bR = int(cum.searchsorted(R, 'right')) - 1\n        cbR = cum.item(bR)\n        offR = R - cbR\n        if L >= cbR:\n            bL = bR\n            offL = L - cbR\n        else:\n            bL = int(cum.searchsorted(L, 'right')) - 1\n            offL = L - cum.item(bL)\n        blkL = blocks[bL]\n        if offL:\n            val = blkL[offL - 1]\n        else:\n            b2 = int(cum.searchsorted(L - 1, 'right')) - 1\n            val = blocks[b2][L - 1 - cum.item(b2)]\n        blocks[bR].pop(offR)\n        blkL.insert(offL, val)\n        if bL != bR:\n            cum[bL + 1:bR + 1] += 1\n            if len(blkL) > LIMIT:\n                h = len(blkL) >> 1\n                blocks[bL:bL + 1] = [blkL[:h], blkL[h:]]\n                nb = len(blocks)\n                cum = np.zeros(nb + 1, dtype=np.int64)\n                np.cumsum(np.fromiter((len(b) for b in blocks), np.int64, nb),\n                          out=cum[1:])\n\n    g = []\n    for b in blocks:\n        g.extend(b)\n\n    p = 1 + 2 * n\n    q = int(data[p])\n    p += 1\n    out = '\\n'.join([str(bisect_left(g, int(t))) for t in data[p:p + q]])\n    sys.stdout.write(out + '\\n')\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 32945,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc389_e",
+        "code": "import sys\nimport numpy as np\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0]); M = int(data[1])\n    P = np.array(list(map(int, data[2:2+n])), dtype=np.int64)\n    Pf = P.astype(np.float64)\n    # kmax_i : any k above this makes cost exceed M\n    q = (M // P).astype(np.float64)\n    kmax = np.sqrt(q).astype(np.int64) + 2\n\n    def calc(X):\n        # returns (cost, count) if cost <= M else (None, None)\n        k = (X // P + 1) // 2\n        np.minimum(k, kmax, out=k)\n        kf = k.astype(np.float64)\n        s = float((kf * kf * Pf).sum())\n        if s > 2e18:\n            return None, None\n        cost = int((k * k * P).sum())\n        if cost > M:\n            return None, None\n        return cost, int(k.sum())\n\n    lo = 0\n    hi = 2 * 10**14\n    while lo < hi:\n        mid = (lo + hi + 1) // 2\n        c, cnt = calc(mid)\n        if c is not None:\n            lo = mid\n        else:\n            hi = mid - 1\n\n    X = lo\n    cost, cnt = calc(X)\n    if cost is None:\n        cost, cnt = 0, 0\n        X = 0\n    ans = cnt + (M - cost) // (X + 1)\n    sys.stdout.write(str(ans) + \"\\n\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 6687,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "arc190_c",
+        "code": "import sys\nimport numpy as np\nfrom operator import mul as _mul\n\ndef modpow_arr(base, e, MOD):\n    b = base % MOD\n    res = None\n    while e:\n        if e & 1:\n            if res is None: res = b.copy()\n            else:\n                res *= b; res %= MOD\n        e >>= 1\n        if e:\n            b *= b; b %= MOD\n    if res is None: res = np.ones(base.shape, dtype=np.int64)\n    return res\n\ndef main():\n    MOD = 998244353\n    data = sys.stdin.buffer.read().split()\n    H = int(data[0]); W = int(data[1]); n = H*W\n    A = np.fromiter(map(int, data[2:2+n]), dtype=np.int64, count=n).reshape(H, W)\n    k = 2+n\n    Q = int(data[k]); sh = int(data[k+1]); sw = int(data[k+2]); k += 3\n    dirs = data[k:k+2*Q:2]\n    avals = list(map(int, data[k+1:k+2*Q:2]))\n    del data\n    if W > H:\n        A = np.ascontiguousarray(A.T); H, W = W, H; sh, sw = sw, sh\n        dmap = {b'U':2, b'D':3, b'L':0, b'R':1}\n    else:\n        dmap = {b'U':0, b'D':1, b'L':2, b'R':3}\n    dc_ = [dmap[x] for x in dirs]; del dirs\n    p = sh-1; q = sw-1; out = []; outap = out.append\n    if W <= 40:\n        Al = A.tolist(); del A\n        Fm = [None]*(H+1); f0 = [0]*W; f0[0] = 1; Fm[0] = f0\n        rw = range(W); rwr = range(W-1, -1, -1)\n        for r in rw and range(H):\n            v = Fm[r]; ar = Al[r]; nw = []; ap = nw.append; s = 0\n            for x, y in zip(ar, v):\n                s = x*(y+s) % MOD; ap(s)\n            Fm[r+1] = nw\n        Gm = [None]*(H+1); g0 = [0]*W; g0[W-1] = 1; Gm[H] = g0\n        for r in range(H-1, -1, -1):\n            v = Gm[r+1]; ar = Al[r]; nw = []; ap = nw.append; s = 0\n            for c in rwr:\n                s = ar[c]*(v[c]+s) % MOD; ap(s)\n            nw.reverse(); Gm[r] = nw\n        fu = H-1; gd = 0; pf = True; last = -1\n        for i in range(Q):\n            d = dc_[i]\n            if d == 0: p -= 1; pf = False\n            elif d == 1: p += 1; pf = True\n            elif d == 2: q -= 1\n            else: q += 1\n            a = avals[i]; ra = Al[p]\n            if ra[q] != a:\n                ra[q] = a\n                if fu > p-1: fu = p-1\n                if gd < p+1: gd = p+1\n            elif last >= 0:\n                outap(last); continue\n            while fu < gd-1:\n                if pf:\n                    r = fu+1; v = Fm[r]; ar = Al[r]; nw = []; ap = nw.append; s = 0\n                    for x, y in zip(ar, v):\n                        s = x*(y+s) % MOD; ap(s)\n                    Fm[r+1] = nw; fu = r\n                else:\n                    r = gd-1; v = Gm[r+1]; ar = Al[r]; nw = []; ap = nw.append; s = 0\n                    for c in rwr:\n                        s = ar[c]*(v[c]+s) % MOD; ap(s)\n                    nw.reverse(); Gm[r] = nw; gd = r\n            last = sum(map(_mul, Fm[gd], Gm[gd])) % MOD; outap(last)\n    else:\n        anp = np.array(avals, dtype=np.int64)\n        iav = modpow_arr(np.where(anp == 0, 1, anp), MOD-2, MOD).tolist(); del anp\n        zm = (A == 0); Anz = np.where(zm, 1, A)\n        Pf = Anz.copy(); d = 1\n        while d < W:\n            Pf[:, d:] = Pf[:, d:]*Pf[:, :-d] % MOD; d <<= 1\n        Sf = np.empty_like(Pf); Sf[:, 0] = 1; Sf[:, 1:] = Pf[:, :-1]\n        IPf = modpow_arr(Sf, MOD-2, MOD)\n        iA = np.empty_like(Pf); iA[:, :W-1] = Sf[:, :W-1]*IPf[:, 1:] % MOD\n        lc = modpow_arr(np.ascontiguousarray(Pf[:, W-1]), MOD-2, MOD)\n        iA[:, W-1] = Sf[:, W-1]*lc % MOD; del Sf, lc\n        i1 = np.arange(1, W+1, dtype=np.int64); i0 = np.arange(W, dtype=np.int64)\n        LZ = np.where(zm, i1, 0); np.maximum.accumulate(LZ, axis=1, out=LZ)\n        NZ = np.ascontiguousarray(np.minimum.accumulate(np.where(zm, i0, W)[:, ::-1], axis=1)[:, ::-1])\n        hz = zm.any(axis=1).tolist()\n        PC = Anz.copy(); d = 1\n        while d < H:\n            PC[d:, :] = PC[d:, :]*PC[:-d, :] % MOD; d <<= 1\n        IPC = np.empty_like(PC); IPC[0, :] = 1; IPC[1:, :] = iA[:-1, :]; d = 1\n        while d < H:\n            IPC[d:, :] = IPC[d:, :]*IPC[:-d, :] % MOD; d <<= 1\n        chz = zm.any(axis=0).tolist()\n        a1 = np.arange(1, H+1, dtype=np.int64).reshape(H, 1); a0 = np.arange(H, dtype=np.int64).reshape(H, 1)\n        LZC = np.where(zm, a1, 0); np.maximum.accumulate(LZC, axis=0, out=LZC)\n        NZC = np.ascontiguousarray(np.minimum.accumulate(np.where(zm, a0, H)[::-1, :], axis=0)[::-1, :])\n        Fm = np.zeros((H+1, W), dtype=np.int64); Fm[0, 0] = 1\n        S0c = np.zeros(H+1, dtype=np.int64); Sc = S0c[1:]\n        w0 = np.zeros(H, dtype=np.int64); w0[0] = 1\n        for c in range(W):\n            wv = w0 if c == 0 else Fm[1:, c-1]\n            t = wv*IPC[:, c] % MOD; np.cumsum(t, out=Sc)\n            df = (Sc - S0c[LZC[:, c]]) % MOD if chz[c] else Sc % MOD\n            Fm[1:, c] = PC[:, c]*df % MOD\n        Gm = np.zeros((H+1, W), dtype=np.int64); Gm[H, W-1] = 1\n        R0c = np.zeros(H+1, dtype=np.int64); wH = np.zeros(H, dtype=np.int64); wH[H-1] = 1\n        for c in range(W-1, -1, -1):\n            wv = wH if c == W-1 else Gm[:H, c+1]\n            gm = wv*PC[:, c] % MOD; R0c[:H] = np.cumsum(gm[::-1])[::-1]\n            df = (R0c[:H] - R0c[NZC[:, c]]) % MOD if chz[c] else R0c[:H] % MOD\n            Gm[:H, c] = IPC[:, c]*df % MOD\n        del PC, IPC, LZC, NZC, S0c, R0c, Anz, zm\n        Al = A.tolist(); iAl = iA.tolist(); del iA\n        tb = np.empty(W, dtype=np.int64); tb2 = np.empty(W, dtype=np.int64); db = np.empty(W, dtype=np.int64)\n        S0 = np.zeros(W+1, dtype=np.int64); Sv = S0[1:]\n        R0 = np.zeros(W+1, dtype=np.int64); Rv = R0[:W]\n        mul = np.multiply; cus = np.cumsum; sub = np.subtract; mo = np.mod\n        wh = np.where; mxa = np.maximum.accumulate; mna = np.minimum.accumulate\n        fu = H-1; gd = 0; pf = True; last = -1; Wm = W-1\n        for i in range(Q):\n            d = dc_[i]\n            if d == 0: p -= 1; pf = False\n            elif d == 1: p += 1; pf = True\n            elif d == 2: q -= 1\n            else: q += 1\n            a = avals[i]; ra = Al[p]; old = ra[q]\n            if old != a:\n                ra[q] = a; A[p, q] = a; ia = iav[i]; ri = iAl[p]; io = ri[q]; ri[q] = ia\n                if old:\n                    if a: rho = a*io % MOD; irh = old*ia % MOD\n                    else: rho = io; irh = old\n                else: rho = a; irh = ia\n                sl = Pf[p, q:]; sl *= rho; sl %= MOD\n                if q < Wm:\n                    sl = IPf[p, q+1:]; sl *= irh; sl %= MOD\n                if (old == 0) != (a == 0):\n                    zr = A[p] == 0\n                    if zr.any():\n                        hz[p] = True; lz = wh(zr, i1, 0); mxa(lz, out=lz); LZ[p] = lz\n                        NZ[p] = mna(wh(zr, i0, W)[::-1])[::-1]\n                    else: hz[p] = False\n                if fu > p-1: fu = p-1\n                if gd < p+1: gd = p+1\n            elif last >= 0:\n                outap(last); continue\n            while fu < gd-1:\n                if pf:\n                    r = fu+1\n                    mul(Fm[r], IPf[r], out=tb); tb %= MOD; cus(tb, out=Sv)\n                    if hz[r]:\n                        sub(Sv, S0[LZ[r]], out=db); db %= MOD\n                    else: mo(Sv, MOD, out=db)\n                    rs = Fm[r+1]; mul(db, Pf[r], out=rs); rs %= MOD; fu = r\n                else:\n                    r = gd-1\n                    mul(Gm[r+1], Pf[r], out=tb); tb %= MOD\n                    cus(tb[::-1], out=tb2); Rv[:] = tb2[::-1]\n                    if hz[r]:\n                        sub(Rv, R0[NZ[r]], out=db); db %= MOD\n                    else: mo(Rv, MOD, out=db)\n                    rs = Gm[r]; mul(db, IPf[r], out=rs); rs %= MOD; gd = r\n            mul(Fm[gd], Gm[gd], out=tb); tb %= MOD\n            last = int(tb.sum()) % MOD; outap(last)\n    sys.stdout.write(\"\\n\".join(map(str, out)))\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 91739,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "arc190_a",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0]); m = int(data[1])\n    arr = list(map(int, data[2:2+2*m]))\n    L = arr[0::2]\n    R = arr[1::2]\n\n    def out(k, pairs):\n        ops = ['0'] * m\n        for i, o in pairs:\n            ops[i] = str(o)\n        sys.stdout.write(str(k) + \"\\n\" + \" \".join(ops) + \"\\n\")\n\n    # cost 1\n    for i in range(m):\n        if L[i] == 1 and R[i] == n:\n            out(1, [(i, 1)])\n            return\n\n    # cost 2 : two op2 (disjoint intervals)\n    imin = 0\n    imax = 0\n    for i in range(1, m):\n        if R[i] < R[imin]:\n            imin = i\n        if L[i] > L[imax]:\n            imax = i\n    if R[imin] < L[imax]:\n        out(2, [(imin, 2), (imax, 2)])\n        return\n\n    # cost 2 : two op1 covering [1,N]\n    ia = -1\n    ib = -1\n    for i in range(m):\n        if L[i] == 1 and (ia < 0 or R[i] > R[ia]):\n            ia = i\n        if R[i] == n and (ib < 0 or L[i] < L[ib]):\n            ib = i\n    if ia >= 0 and ib >= 0 and ia != ib and L[ib] <= R[ia] + 1:\n        out(2, [(ia, 1), (ib, 1)])\n        return\n\n    # cost 2 : nested pair -> op2 on inner, op1 on outer\n    order = sorted(range(m), key=lambda i: (L[i], -R[i]))\n    best = -1\n    bestidx = -1\n    for i in order:\n        if best >= R[i]:\n            out(2, [(i, 2), (bestidx, 1)])\n            return\n        if R[i] > best:\n            best = R[i]\n            bestidx = i\n\n    # cost 3 if possible\n    if m >= 3:\n        a = order[0]\n        b = order[1]\n        c = order[-1]\n        out(3, [(a, 1), (b, 2), (c, 1)])\n        return\n\n    sys.stdout.write(\"-1\\n\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 12302,
+        "truncated_calls": null,
+        "passed": false,
+        "passed_before_regrade": false
+      },
+      {
+        "question_id": "arc190_d",
+        "code": "import sys\nimport numpy as np\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    idx = 0\n    N = int(data[idx]); idx += 1\n    p = int(data[idx]); idx += 1\n    A = []\n    for i in range(N):\n        row = [int(data[idx + j]) for j in range(N)]\n        idx += N\n        A.append(row)\n    K = sum(1 for i in range(N) for j in range(N) if A[i][j] == 0)\n\n    out = []\n    if p == 2:\n        Ap = np.array([[1 if A[i][j] == 0 else A[i][j] for j in range(N)] for i in range(N)], dtype=np.int64)\n        res = Ap.dot(Ap) % 2\n        for i in range(N):\n            out.append(' '.join(map(str, res[i].tolist())))\n        sys.stdout.write('\\n'.join(out) + '\\n')\n        return\n\n    SHIFT = 15\n    MASK = (1 << SHIFT) - 1\n\n    def mul(X, Y):\n        hi = X >> SHIFT\n        lo = X & MASK\n        return ((hi.dot(Y) % p) * (1 << SHIFT) + lo.dot(Y)) % p\n\n    M = np.array(A, dtype=np.int64) % p\n    R = np.eye(N, dtype=np.int64) % p\n    e = p\n    base = M\n    while e > 0:\n        if e & 1:\n            R = mul(R, base)\n        e >>= 1\n        if e:\n            base = mul(base, base)\n    Ap = R\n\n    extra = [[0] * N for _ in range(N)]\n    for a in range(N):\n        if A[a][a] == 0:\n            for i in range(N):\n                if i != a:\n                    extra[i][a] += A[i][a]\n            for j in range(N):\n                if j != a:\n                    extra[a][j] += A[a][j]\n    if p == 3:\n        for a in range(N):\n            for b in range(N):\n                if a != b and A[a][b] == 0:\n                    extra[a][b] += A[b][a]\n\n    sign = 1 if (K % 2 == 0) else (p - 1)\n    Aplist = Ap.tolist()\n    for i in range(N):\n        row = []\n        ai = Aplist[i]\n        ei = extra[i]\n        for j in range(N):\n            v = (ai[j] + ei[j]) % p\n            v = (v * sign) % p\n            row.append(v)\n        out.append(' '.join(map(str, row)))\n    sys.stdout.write('\\n'.join(out) + '\\n')\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 10670,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "3674",
+        "code": "from collections import deque\nfrom typing import List\n\nclass Solution:\n    def countNonDecreasingSubarrays(self, nums: List[int], k: int) -> int:\n        b = nums[::-1]\n        n = len(b)\n        dq = deque()  # entries: [value, count], values decreasing from front to back\n        total = 0     # sum of max(b[t..r]) for t in [l, r]\n        sumb = 0      # sum of b[l..r]\n        l = 0\n        ans = 0\n        for r in range(n):\n            x = b[r]\n            cnt = 1\n            while dq and dq[-1][0] <= x:\n                v, c = dq.pop()\n                total -= v * c\n                cnt += c\n            dq.append([x, cnt])\n            total += x * cnt\n            sumb += x\n            while total - sumb > k:\n                sumb -= b[l]\n                front = dq[0]\n                front[1] -= 1\n                total -= front[0]\n                if front[1] == 0:\n                    dq.popleft()\n                l += 1\n            ans += r - l + 1\n        return ans",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 2844,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc388_g",
+        "code": "import sys\nfrom bisect import bisect_left\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0])\n    A = data[1:1+n]\n    A = list(map(int, A))\n    q = int(data[1+n])\n    BIG = 1 << 40\n    h = [0]*n\n    for i in range(n):\n        j = bisect_left(A, 2*A[i])\n        if j >= n:\n            h[i] = BIG\n        else:\n            h[i] = j - i\n    # sparse table\n    sp = [h]\n    k = 1\n    while (1 << k) <= n:\n        prev = sp[-1]\n        half = 1 << (k-1)\n        sp.append(list(map(max, prev, prev[half:])))\n        k += 1\n\n    out = []\n    idx = 2 + n\n    for _ in range(q):\n        l = int(data[idx]) - 1\n        r = int(data[idx+1]) - 1\n        idx += 2\n        lo = 0\n        hi = (r - l + 1) >> 1\n        while lo < hi:\n            mid = (lo + hi + 1) >> 1\n            # range max over [l, l+mid-1]\n            ln = mid\n            kk = ln.bit_length() - 1\n            spk = sp[kk]\n            a = spk[l]\n            b = spk[l + mid - (1 << kk)]\n            m = a if a > b else b\n            if m <= r - mid + 1 - l:\n                lo = mid\n            else:\n                hi = mid - 1\n        out.append(lo)\n    sys.stdout.write('\\n'.join(map(str, out)) + '\\n')\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 2626,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc388_f",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    N = int(data[0]); M = int(data[1]); A = int(data[2]); B = int(data[3])\n    full = (1 << B) - 1\n    rmask = ((1 << (B - A + 1)) - 1) << (A - 1)\n\n    def Dbit(d):\n        if d < 0:\n            return 0\n        if d == 0:\n            return 1\n        k = -(-d // B)\n        return 1 if k * A <= d else 0\n\n    def advance(mask, g):\n        # squares x+1 .. x+g all free\n        if g <= 0:\n            return mask\n        s = g if g < B else B\n        for _ in range(s):\n            mask = ((mask << 1) | (1 if mask & rmask else 0)) & full\n        g -= s\n        if g > 0:\n            Qc = 0\n            for j in range(B):\n                if Dbit(g - j):\n                    Qc |= 1 << j\n            new = 0\n            c = g\n            for i in range(B):\n                if (mask >> i) & 1:\n                    new |= Qc\n                    if new == full:\n                        break\n                c += 1\n                Qc = ((Qc << 1) | Dbit(c)) & full\n            mask = new\n        return mask\n\n    mask = 1\n    x = 1\n    idx = 4\n    out = None\n    for _ in range(M):\n        L = int(data[idx]); R = int(data[idx + 1]); idx += 2\n        g = L - 1 - x\n        mask = advance(mask, g)\n        x = L - 1\n        if mask == 0:\n            out = \"No\"\n            break\n        ln = R - L + 1\n        if ln >= B:\n            out = \"No\"\n            break\n        for _ in range(ln):\n            mask = (mask << 1) & full\n        x = R\n        if mask == 0:\n            out = \"No\"\n            break\n    if out is not None:\n        sys.stdout.write(out + \"\\n\")\n        return\n    g = N - x\n    mask = advance(mask, g)\n    sys.stdout.write(\"Yes\\n\" if (mask & 1) else \"No\\n\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 22940,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc388_e",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0])\n    A = list(map(int, data[1:1+n]))\n    i = 0\n    count = 0\n    for j in range(n):\n        if 2 * A[i] <= A[j]:\n            count += 1\n            i += 1\n    sys.stdout.write(str(count) + \"\\n\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 804,
+        "truncated_calls": null,
+        "passed": false,
+        "passed_before_regrade": false
+      },
+      {
+        "question_id": "3562",
+        "code": "from bisect import bisect_left\nfrom typing import List\n\nclass Solution:\n    def maximumWeight(self, intervals: List[List[int]]) -> List[int]:\n        n = len(intervals)\n        items = sorted((r, l, w, i) for i, (l, r, w) in enumerate(intervals))\n        rs = [it[0] for it in items]\n\n        empty = (0, ())\n        dp = [None] * (n + 1)\n        dp[0] = [empty] * 5\n\n        for i in range(1, n + 1):\n            r, l, w, idx = items[i - 1]\n            p = bisect_left(rs, l)\n            prev = dp[i - 1]\n            base = dp[p]\n            row = [empty, None, None, None, None]\n            for k in range(1, 5):\n                a = prev[k]\n                bw, bl = base[k - 1]\n                cw = bw + w\n                if cw > a[0]:\n                    pos = bisect_left(bl, idx)\n                    row[k] = (cw, bl[:pos] + (idx,) + bl[pos:])\n                elif cw == a[0]:\n                    pos = bisect_left(bl, idx)\n                    cand = bl[:pos] + (idx,) + bl[pos:]\n                    row[k] = (cw, cand) if cand < a[1] else a\n                else:\n                    row[k] = a\n            dp[i] = row\n\n        return list(dp[n][4][1])",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 4429,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "3688",
+        "code": "from typing import List\n\nclass Solution:\n    def maxSubarraySum(self, nums: List[int]) -> int:\n        n = len(nums)\n        # plain Kadane\n        best = nums[0]\n        cur = 0\n        for v in nums:\n            cur = cur + v if cur > 0 else v\n            if cur > best:\n                best = cur\n        if best < 0:\n            return best  # all elements negative\n\n        groups = {}\n        for i in range(n):\n            v = nums[i]\n            if v < 0:\n                g = groups.get(v)\n                if g is None:\n                    groups[v] = [i + 1]\n                else:\n                    g.append(i + 1)\n        if not groups:\n            return best\n\n        P = [0] * (n + 1)\n        s = 0\n        for i in range(n):\n            s += nums[i]\n            P[i + 1] = s\n        m = n + 1\n\n        maxt = [P]\n        mint = [P]\n        try:\n            import numpy as np\n            cmax = np.array(P, dtype=np.int64)\n            cmin = cmax\n            k = 1\n            while (1 << k) <= m:\n                step = 1 << (k - 1)\n                cmax = np.maximum(cmax[:-step], cmax[step:])\n                cmin = np.minimum(cmin[:-step], cmin[step:])\n                maxt.append(cmax)\n                mint.append(cmin)\n                k += 1\n        except Exception:\n            k = 1\n            while (1 << k) <= m:\n                step = 1 << (k - 1)\n                pv = maxt[-1]\n                maxt.append([a if a > b else b for a, b in zip(pv, pv[step:])])\n                pv = mint[-1]\n                mint.append([a if a < b else b for a, b in zip(pv, pv[step:])])\n                k += 1\n\n        NEG = float('-inf')\n        for x, ps in groups.items():\n            c = len(ps)\n            if c >= n:\n                continue\n            maxA = NEG\n            for idx in range(c):\n                pa = ps[idx]\n                prevp = ps[idx - 1] if idx else 0\n                pm1 = pa - 1\n                if prevp <= pa - 2:\n                    l = prevp\n                    r = pa - 2\n                    kk = (r - l + 1).bit_length() - 1\n                    t = mint[kk]\n                    v1 = t[l]\n                    v2 = t[r - (1 << kk) + 1]\n                    mn = v1 if v1 < v2 else v2\n                    L = P[pm1] - int(mn)\n                    if L < 0:\n                        L = 0\n                else:\n                    L = 0\n                A = L - P[pm1] + x * idx\n                if A > maxA:\n                    maxA = A\n\n                pb = pa\n                nextp = ps[idx + 1] if idx + 1 < c else n + 1\n                if pb + 1 <= nextp - 1:\n                    l = pb + 1\n                    r = nextp - 1\n                    kk = (r - l + 1).bit_length() - 1\n                    t = maxt[kk]\n                    v1 = t[l]\n                    v2 = t[r - (1 << kk) + 1]\n                    mx = v1 if v1 > v2 else v2\n                    R = int(mx) - P[pb]\n                    if R < 0:\n                        R = 0\n                else:\n                    R = 0\n                B = P[pb] - x * (idx + 1) + R\n                cand = maxA + B\n                if cand > best:\n                    best = cand\n        return best",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 17044,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc387_f",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    MOD = 998244353\n    N = int(data[0]); M = int(data[1])\n    A = [int(data[2+i]) - 1 for i in range(N)]\n\n    state = [0] * N\n    oncyc = [False] * N\n    comp = list(range(N))\n\n    for i in range(N):\n        if state[i]:\n            continue\n        path = []\n        v = i\n        while state[v] == 0:\n            state[v] = 1\n            path.append(v)\n            v = A[v]\n        if state[v] == 1:\n            idx = path.index(v)\n            rep = v\n            for u in path[idx:]:\n                oncyc[u] = True\n                comp[u] = rep\n        for u in path:\n            state[u] = 2\n\n    children = [[] for _ in range(N)]\n    roots = []\n    for i in range(N):\n        if oncyc[i]:\n            if comp[i] == i:\n                roots.append(i)\n        else:\n            children[comp[A[i]]].append(i)\n\n    # topological order: parents before children\n    order = []\n    stack = list(roots)\n    while stack:\n        v = stack.pop()\n        order.append(v)\n        for c in children[v]:\n            stack.append(c)\n\n    F = [None] * N\n    for v in reversed(order):\n        ch = children[v]\n        if not ch:\n            F[v] = [1] * M\n            continue\n        cur = None\n        for c in ch:\n            fc = F[c]\n            F[c] = None\n            s = 0\n            p = []\n            ap = p.append\n            for x in fc:\n                s += x\n                if s >= MOD:\n                    s -= MOD\n                ap(s)\n            if cur is None:\n                cur = p\n            else:\n                cur = [a * b % MOD for a, b in zip(cur, p)]\n        F[v] = cur\n\n    ans = 1\n    for r in roots:\n        ans = ans * (sum(F[r]) % MOD) % MOD\n    print(ans % MOD)\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 2853,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "3682",
+        "code": "class Solution:\n    def countGoodArrays(self, n: int, m: int, k: int) -> int:\n        MOD = 10**9 + 7\n        if k > n - 1 or k < 0:\n            return 0\n        N = n\n        # factorials\n        fact = [1] * (N + 1)\n        for i in range(1, N + 1):\n            fact[i] = fact[i-1] * i % MOD\n        inv_fact = [1] * (N + 1)\n        inv_fact[N] = pow(fact[N], MOD - 2, MOD)\n        for i in range(N, 0, -1):\n            inv_fact[i-1] = inv_fact[i] * i % MOD\n        comb = fact[n-1] * inv_fact[k] % MOD * inv_fact[n-1-k] % MOD\n        return m * comb % MOD * pow(m - 1, n - 1 - k, MOD) % MOD",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 339,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc386_e",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0]); K = int(data[1])\n    a = list(map(int, data[2:2+n]))\n    tot = 0\n    for x in a:\n        tot ^= x\n\n    if K <= n - K:\n        m = K\n        base = 0\n    else:\n        m = n - K\n        base = tot\n\n    if m == 0:\n        sys.stdout.write(str(tot) + \"\\n\")\n        return\n\n    if m == 1:\n        b = 0\n        for x in a:\n            v = base ^ x\n            if v > b:\n                b = v\n        sys.stdout.write(str(b) + \"\\n\")\n        return\n\n    # here m >= 2, so C(n,2) <= C(n,m) <= 1e6  => n <= ~1415\n    suf = [None] * (n + 1)\n    for i in range(n + 1):\n        suf[i] = a[i:]\n\n    best = 0\n\n    sys.setrecursionlimit(10000)\n\n    def rec(start, depth, cur):\n        nonlocal best\n        if depth == 2:\n            aa = a\n            lim = n - 1\n            bst = best\n            for i in range(start, lim):\n                v = cur ^ aa[i]\n                b = 0\n                for x in suf[i+1]:\n                    t = v ^ x\n                    if t > b:\n                        b = t\n                if b > bst:\n                    bst = b\n            if bst > best:\n                best = bst\n        else:\n            nd = depth - 1\n            aa = a\n            end = n - depth + 1\n            for i in range(start, end):\n                rec(i + 1, nd, cur ^ aa[i])\n\n    rec(0, m, base)\n    sys.stdout.write(str(best) + \"\\n\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 4666,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc386_d",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0]); m = int(data[1])\n    L = {}\n    U = {}\n    idx = 2\n    for _ in range(m):\n        x = int(data[idx]); y = int(data[idx+1]); c = data[idx+2]\n        idx += 3\n        if c == b'B':\n            if x in L:\n                if y > L[x]:\n                    L[x] = y\n            else:\n                L[x] = y\n        else:\n            v = y - 1\n            if x in U:\n                if v < U[x]:\n                    U[x] = v\n            else:\n                U[x] = v\n    rows = set(L.keys()) | set(U.keys())\n    prev = n\n    ok = True\n    for x in sorted(rows):\n        lo = L.get(x, 0)\n        hi = U.get(x, n)\n        cur = prev if prev < hi else hi\n        if cur < lo:\n            ok = False\n            break\n        prev = cur\n    print(\"Yes\" if ok else \"No\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 1147,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc386_f",
+        "code": "import sys, random\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    K = int(data[0])\n    S = data[1]\n    T = data[2]\n    n = len(S); m = len(T)\n    if abs(n - m) > K:\n        sys.stdout.write(\"No\\n\"); return\n    if S == T:\n        sys.stdout.write(\"Yes\\n\"); return\n\n    MOD = (1 << 61) - 1\n    base = random.randrange(1000, 1 << 40)\n\n    N = max(n, m) + 1\n    pw = [1] * N\n    p = 1\n    for i in range(1, N):\n        p = p * base % MOD\n        pw[i] = p\n\n    hs = [0] * (n + 1)\n    h = 0\n    idx = 1\n    for c in S:\n        h = (h * base + c) % MOD\n        hs[idx] = h\n        idx += 1\n\n    ht = [0] * (m + 1)\n    h = 0\n    idx = 1\n    for c in T:\n        h = (h * base + c) % MOD\n        ht[idx] = h\n        idx += 1\n\n    def lcp(i, j):\n        hi = n - i\n        t2 = m - j\n        if t2 < hi:\n            hi = t2\n        if hi == 0:\n            return 0\n        if S[i] != T[j]:\n            return 0\n        if hi == 1:\n            return 1\n        lo = 1\n        while lo < hi:\n            mid = (lo + hi + 1) >> 1\n            if (hs[i + mid] - hs[i] * pw[mid]) % MOD == (ht[j + mid] - ht[j] * pw[mid]) % MOD:\n                lo = mid\n            else:\n                hi = mid - 1\n        return lo\n\n    NEG = -(10 ** 9)\n    off = K + 2\n    size = 2 * K + 5\n    prev = None\n    kd = m - n\n    for d in range(K + 1):\n        cur = [NEG] * size\n        lowk = -d\n        if lowk < -n:\n            lowk = -n\n        highk = d\n        if highk > m:\n            highk = m\n        for k in range(lowk, highk + 1):\n            if d == 0:\n                i = 0\n            else:\n                i = NEG\n                a = prev[k + off]\n                if a >= 0:\n                    i = a + 1\n                b = prev[k - 1 + off]\n                if b >= 0 and b > i:\n                    i = b\n                c = prev[k + 1 + off]\n                if c >= 0 and c + 1 > i:\n                    i = c + 1\n                if i < 0:\n                    continue\n            if i > n:\n                i = n\n            lim = m - k\n            if i > lim:\n                i = lim\n            if i < n and i + k < m:\n                i += lcp(i, i + k)\n            cur[k + off] = i\n        if lowk <= kd <= highk and cur[kd + off] == n:\n            sys.stdout.write(\"Yes\\n\"); return\n        prev = cur\n    sys.stdout.write(\"No\\n\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 4572,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "3690",
+        "code": "class Solution:\n    def minLength(self, s: str, numOps: int) -> int:\n        n = len(s)\n        # check k = 1\n        c0 = 0  # cost to make s match pattern starting with '0'\n        for i, ch in enumerate(s):\n            want = '0' if i % 2 == 0 else '1'\n            if ch != want:\n                c0 += 1\n        c1 = n - c0\n        if min(c0, c1) <= numOps:\n            return 1\n\n        def cost(k):\n            total = 0\n            i = 0\n            while i < n:\n                j = i\n                while j < n and s[j] == s[i]:\n                    j += 1\n                L = j - i\n                total += L // (k + 1)\n                i = j\n            return total\n\n        lo, hi = 2, n\n        while lo < hi:\n            mid = (lo + hi) // 2\n            if cost(mid) <= numOps:\n                hi = mid\n            else:\n                lo = mid + 1\n        return lo",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 420,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "3700",
+        "code": "from typing import List\n\nclass Solution:\n    def subsequencesWithMiddleMode(self, nums: List[int]) -> int:\n        MOD = 10**9 + 7\n        n = len(nums)\n        vals = {}\n        arr = []\n        for v in nums:\n            if v not in vals:\n                vals[v] = len(vals)\n            arr.append(vals[v])\n        m = len(vals)\n        la = [0] * m\n        rb = [0] * m\n        for v in arr:\n            rb[v] += 1\n        L = 0\n        R = n\n        TL2 = 0\n        TR2 = sum(c * (c - 1) // 2 for c in rb)\n        TCross = 0   # sum la*rb\n        TC2 = 0      # sum la*rb^2\n        TC3 = 0      # sum la^2*rb\n        ans = 0\n\n        def C2(t):\n            return t * (t - 1) // 2 if t >= 2 else 0\n\n        for i in range(n):\n            x = arr[i]\n            # remove index i from the right side\n            r = rb[x]\n            TR2 -= (r - 1)\n            TCross -= la[x]\n            TC2 -= (2 * r - 1) * la[x]\n            TC3 -= la[x] * la[x]\n            rb[x] = r - 1\n            R -= 1\n\n            if L >= 2 and R >= 2:\n                a = la[x]\n                b = rb[x]\n                La = L - a\n                Rb = R - b\n                cnt = (C2(L) * C2(R) - C2(La) * C2(Rb)\n                       - a * La * C2(Rb) - b * Rb * C2(La))\n                SL2 = TL2 - C2(a)\n                SR2 = TR2 - C2(b)\n                cross1 = TCross - a * b\n                cross2 = TC2 - a * b * b\n                cross3 = TC3 - a * a * b\n                if a > 0 and Rb >= 2:\n                    good = La * (C2(Rb) - SR2) - (Rb * cross1 - cross2)\n                    cnt += a * good\n                if b > 0 and La >= 2:\n                    good = Rb * (C2(La) - SL2) - (La * cross1 - cross3)\n                    cnt += b * good\n                ans = (ans + cnt) % MOD\n\n            # add index i to the left side\n            TL2 += la[x]\n            TCross += rb[x]\n            TC2 += rb[x] * rb[x]\n            TC3 += (2 * la[x] + 1) * rb[x]\n            la[x] += 1\n            L += 1\n\n        return ans % MOD",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 7141,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc385_f",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0])\n    X = list(map(int, data[1::2]))\n    H = list(map(int, data[2::2]))\n\n    bn = None  # best numerator\n    bd = 1     # best denominator (always positive)\n\n    for i in range(n - 1):\n        x1 = X[i]; x2 = X[i + 1]\n        num = H[i] * x2 - H[i + 1] * x1\n        den = x2 - x1  # > 0\n        if bn is None or num * bd > bn * den:\n            bn = num\n            bd = den\n\n    if bn is None or bn < 0:\n        sys.stdout.write(\"-1\\n\")\n    else:\n        val = bn / bd\n        sys.stdout.write(\"%.18f\\n\" % val)\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 18812,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": false
+      },
+      {
+        "question_id": "abc385_d",
+        "code": "import sys\nfrom bisect import bisect_left, bisect_right\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0]); m = int(data[1]); sx = int(data[2]); sy = int(data[3])\n    X = [0]*n; Y = [0]*n\n    pos = 4\n    for i in range(n):\n        X[i] = int(data[pos]); Y[i] = int(data[pos+1]); pos += 2\n\n    # group by x, sorted by y\n    order = sorted(range(n), key=lambda i: (X[i], Y[i]))\n    xdict = {}\n    i = 0\n    while i < n:\n        j = i\n        cx = X[order[i]]\n        while j < n and X[order[j]] == cx:\n            j += 1\n        ylist = [Y[order[k]] for k in range(i, j)]\n        idlist = [order[k] for k in range(i, j)]\n        par = list(range(j - i + 1))\n        xdict[cx] = (ylist, idlist, par)\n        i = j\n\n    order2 = sorted(range(n), key=lambda i: (Y[i], X[i]))\n    ydict = {}\n    i = 0\n    while i < n:\n        j = i\n        cy = Y[order2[i]]\n        while j < n and Y[order2[j]] == cy:\n            j += 1\n        xlist = [X[order2[k]] for k in range(i, j)]\n        idlist = [order2[k] for k in range(i, j)]\n        par = list(range(j - i + 1))\n        ydict[cy] = (xlist, idlist, par)\n        i = j\n\n    def find(par, i):\n        r = i\n        while par[r] != r:\n            r = par[r]\n        while par[i] != r:\n            par[i], i = r, par[i]\n        return r\n\n    visited = bytearray(n)\n    cnt = 0\n    cx = sx; cy = sy\n\n    for k in range(m):\n        d = data[pos]; c = int(data[pos+1]); pos += 2\n        if d == b'U' or d == 'U':\n            ny = cy + c\n            lo = cy; hi = ny\n            g = xdict.get(cx)\n            if g is not None:\n                ylist, idlist, par = g\n                l = bisect_left(ylist, lo)\n                r = bisect_right(ylist, hi)\n                idx = find(par, l)\n                while idx < r:\n                    hid = idlist[idx]\n                    if not visited[hid]:\n                        visited[hid] = 1\n                        cnt += 1\n                    par[idx] = idx + 1\n                    idx = find(par, idx + 1)\n            cy = ny\n        elif d == b'D' or d == 'D':\n            ny = cy - c\n            lo = ny; hi = cy\n            g = xdict.get(cx)\n            if g is not None:\n                ylist, idlist, par = g\n                l = bisect_left(ylist, lo)\n                r = bisect_right(ylist, hi)\n                idx = find(par, l)\n                while idx < r:\n                    hid = idlist[idx]\n                    if not visited[hid]:\n                        visited[hid] = 1\n                        cnt += 1\n                    par[idx] = idx + 1\n                    idx = find(par, idx + 1)\n            cy = ny\n        elif d == b'L' or d == 'L':\n            nx = cx - c\n            lo = nx; hi = cx\n            g = ydict.get(cy)\n            if g is not None:\n                xlist, idlist, par = g\n                l = bisect_left(xlist, lo)\n                r = bisect_right(xlist, hi)\n                idx = find(par, l)\n                while idx < r:\n                    hid = idlist[idx]\n                    if not visited[hid]:\n                        visited[hid] = 1\n                        cnt += 1\n                    par[idx] = idx + 1\n                    idx = find(par, idx + 1)\n            cx = nx\n        else:\n            nx = cx + c\n            lo = cx; hi = nx\n            g = ydict.get(cy)\n            if g is not None:\n                xlist, idlist, par = g\n                l = bisect_left(xlist, lo)\n                r = bisect_right(xlist, hi)\n                idx = find(par, l)\n                while idx < r:\n                    hid = idlist[idx]\n                    if not visited[hid]:\n                        visited[hid] = 1\n                        cnt += 1\n                    par[idx] = idx + 1\n                    idx = find(par, idx + 1)\n            cx = nx\n\n    sys.stdout.write(f\"{cx} {cy} {cnt}\\n\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 3469,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc385_e",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0])\n    m = n - 1\n    us = [0] * m\n    vs = [0] * m\n    deg = [0] * (n + 1)\n    idx = 1\n    for i in range(m):\n        u = int(data[idx]); v = int(data[idx + 1])\n        idx += 2\n        us[i] = u; vs[i] = v\n        deg[u] += 1\n        deg[v] += 1\n\n    # CSR adjacency\n    start = [0] * (n + 2)\n    for v in range(1, n + 1):\n        start[v + 1] = start[v] + deg[v]\n    pos = start[:]  # copy\n    adj = [0] * (2 * m)\n    for i in range(m):\n        u = us[i]; v = vs[i]\n        adj[pos[u]] = v\n        pos[u] += 1\n        adj[pos[v]] = u\n        pos[v] += 1\n\n    degm1 = [0] * (n + 1)\n    for v in range(1, n + 1):\n        degm1[v] = deg[v] - 1\n\n    best = 0\n    for c in range(1, n + 1):\n        s = start[c]; e = start[c + 1]\n        if s == e:\n            continue\n        vals = [degm1[adj[j]] for j in range(s, e)]\n        vals.sort(reverse=True)\n        x = 0\n        for y in vals:\n            if y < 1:\n                break\n            x += 1\n            cand = 1 + x + x * y\n            if cand > best:\n                best = cand\n    sys.stdout.write(str(n - best) + \"\\n\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 1645,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "3638",
+        "code": "class Solution:\n    def makeStringGood(self, s: str) -> int:\n        cnt = [0] * 26\n        for ch in s:\n            cnt[ord(ch) - 97] += 1\n        INF = 1 << 30\n        best = len(s)           # deleting everything (all letters -> 0)\n        maxc = max(cnt)\n        for t in range(1, maxc + 1):\n            a1, v1 = 0, 0       # state: avail amount -> min cost\n            a2, v2 = 0, INF\n            for ci in cnt:\n                m = v1 if v1 < v2 else v2\n                if m >= best:   # costs are non-decreasing; cannot improve\n                    v1 = INF\n                    v2 = INF\n                    break\n                na1 = ci\n                nv1 = m + ci                     # final count 0\n                if ci >= t:                      # final count t, surplus passed on\n                    na2 = ci - t\n                    nv2 = m + ci - t\n                else:                            # final count t, may receive\n                    need = t - ci\n                    x1 = a1 if a1 < need else need\n                    x2 = a2 if a2 < need else need\n                    b1 = v1 - x1\n                    b2 = v2 - x2\n                    b = b1 if b1 < b2 else b2\n                    na2 = 0\n                    nv2 = b + need\n                if na1 == na2:                   # merge identical states\n                    if nv2 < nv1:\n                        nv1 = nv2\n                    na2 = 0\n                    nv2 = INF\n                a1, v1, a2, v2 = na1, nv1, na2, nv2\n            r = v1 if v1 < v2 else v2\n            if r < best:\n                best = r\n        return best",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 12548,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc384_g",
+        "code": "import sys\nimport numpy as np\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    N = int(data[0])\n    A = np.fromiter(map(int, data[1:1+N]), dtype=np.int64, count=N)\n    B = np.fromiter(map(int, data[1+N:1+2*N]), dtype=np.int64, count=N)\n    K = int(data[1+2*N])\n    xy = np.fromiter(map(int, data[2+2*N:2+2*N+2*K]), dtype=np.int64, count=2*K)\n    X = np.ascontiguousarray(xy[0::2]); Y = np.ascontiguousarray(xy[1::2])\n\n    b = int((2.0*N*N/max(K,1))**0.5) + 1\n    if b > N: b = N\n    if b < 1: b = 1\n\n    P = X // b; Q = Y // b\n    Xb = P*b; Yb = Q*b\n    ans = np.zeros(K, dtype=np.int64)\n\n    # Phase 1\n    order = np.argsort(Q, kind='stable'); Qs = Q[order]\n    uq, st = np.unique(Qs, return_index=True); en = np.append(st[1:], K)\n    F = np.zeros(N, dtype=np.int64); Cq = np.zeros(N+1, dtype=np.int64)\n    t = 0; nu = len(uq); maxq = int(uq[-1])\n    for q in range(maxq+1):\n        if t < nu and uq[t] == q:\n            np.cumsum(F, out=Cq[1:])\n            idx = order[st[t]:en[t]]\n            ans[idx] += Cq[X[idx]]\n            t += 1\n        s = q*b; e = s+b\n        if e > N: e = N\n        if s >= e: break\n        blk = np.sort(B[s:e]); nb = e-s\n        PB = np.zeros(nb+1, dtype=np.int64); np.cumsum(blk, out=PB[1:])\n        pos = np.searchsorted(blk, A, side='right')\n        F += 2*(A*pos - PB[pos]) + (PB[nb] - A*nb)\n\n    # Phase 2\n    order2 = np.argsort(P, kind='stable'); Ps = P[order2]\n    up, st2 = np.unique(Ps, return_index=True); en2 = np.append(st2[1:], K)\n    G = np.zeros(N, dtype=np.int64); Dp = np.zeros(N+1, dtype=np.int64)\n    t = 0; nu2 = len(up); maxp = int(up[-1])\n    for p in range(maxp+1):\n        if t < nu2 and up[t] == p:\n            np.cumsum(G, out=Dp[1:])\n            idx = order2[st2[t]:en2[t]]\n            ans[idx] += Dp[Y[idx]] - Dp[Yb[idx]]\n            t += 1\n        s = p*b; e = s+b\n        if e > N: e = N\n        if s >= e: break\n        blk = np.sort(A[s:e]); nb = e-s\n        PA = np.zeros(nb+1, dtype=np.int64); np.cumsum(blk, out=PA[1:])\n        pos = np.searchsorted(blk, B, side='right')\n        G += 2*(B*pos - PA[pos]) + (PA[nb] - B*nb)\n\n    # Phase 3\n    Xl = X.tolist(); Yl = Y.tolist(); Xbl = Xb.tolist(); Ybl = Yb.tolist()\n    res = ans.tolist()\n    srt = np.sort; ss = np.searchsorted; cs = np.cumsum; dt = np.dot; emp = np.empty\n    i64 = np.int64\n    for k in range(K):\n        x0 = Xbl[k]; x1 = Xl[k]; y0 = Ybl[k]; y1 = Yl[k]\n        rx = x1-x0; ry = y1-y0\n        if rx == 0 or ry == 0:\n            continue\n        Aseg = A[x0:x1]; Bseg = B[y0:y1]\n        if rx <= ry:\n            As = srt(Aseg)\n            CA = emp(rx+1, dtype=i64); CA[0] = 0; cs(As, out=CA[1:])\n            pos = ss(As, Bseg, side='right')\n            v = 2*(int(dt(Bseg, pos)) - int(CA[pos].sum())) + int(CA[rx])*ry - int(Bseg.sum())*rx\n        else:\n            Bs = srt(Bseg)\n            CB = emp(ry+1, dtype=i64); CB[0] = 0; cs(Bs, out=CB[1:])\n            pos = ss(Bs, Aseg, side='right')\n            v = 2*(int(dt(Aseg, pos)) - int(CB[pos].sum())) + int(CB[ry])*rx - int(Aseg.sum())*ry\n        res[k] += v\n\n    sys.stdout.write('\\n'.join(map(str, res)) + '\\n')\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 32432,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc384_e",
+        "code": "import sys, heapq\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    idx = 0\n    H = int(data[idx]); idx+=1\n    W = int(data[idx]); idx+=1\n    X = int(data[idx]); idx+=1\n    P = int(data[idx])-1; idx+=1\n    Q = int(data[idx])-1; idx+=1\n    S = [0]*(H*W)\n    for i in range(H*W):\n        S[i] = int(data[idx+i])\n    visited = bytearray(H*W)\n    start = P*W+Q\n    visited[start] = 1\n    cur = S[start]\n    heap = []\n    # push neighbors\n    def push_neighbors(pos):\n        r, c = divmod(pos, W)\n        if r > 0:\n            np_ = pos - W\n            if not visited[np_]:\n                visited[np_] = 1\n                heapq.heappush(heap, (S[np_], np_))\n        if r < H-1:\n            np_ = pos + W\n            if not visited[np_]:\n                visited[np_] = 1\n                heapq.heappush(heap, (S[np_], np_))\n        if c > 0:\n            np_ = pos - 1\n            if not visited[np_]:\n                visited[np_] = 1\n                heapq.heappush(heap, (S[np_], np_))\n        if c < W-1:\n            np_ = pos + 1\n            if not visited[np_]:\n                visited[np_] = 1\n                heapq.heappush(heap, (S[np_], np_))\n    push_neighbors(start)\n    while heap:\n        s, pos = heap[0]\n        if s * X < cur:\n            heapq.heappop(heap)\n            cur += s\n            push_neighbors(pos)\n        else:\n            break\n    print(cur)\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 737,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc384_f",
+        "code": "import sys\nimport numpy as np\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0])\n    A = np.array(data[1:1+n], dtype=np.int64)\n\n    SA = int(A.sum())\n    total = 2 * n * SA\n    Af = A.astype(np.float64)\n    maxA = int(A.max())\n\n    k = 1\n    while (1 << k) <= 2 * maxA:\n        m = (1 << k) - 1\n        r = A & m\n        u, inv, cnt = np.unique(r, return_inverse=True, return_counts=True)\n        inv = np.ravel(inv)\n        L = len(u)\n        s = np.bincount(inv, weights=Af, minlength=L).astype(np.int64)\n        cnt = cnt.astype(np.int64)\n        c = (-u) & m\n        idx = np.searchsorted(u, c)\n        idxc = np.clip(idx, 0, L - 1)\n        valid = (u[idxc] == c)\n        if valid.any():\n            iv = idxc[valid]\n            contrib = int(np.sum(s[valid] * cnt[iv] + cnt[valid] * s[iv]))\n            total -= contrib >> k\n        k += 1\n\n    # diagonal: sum of f(2*A_i) = sum of f(A_i)\n    x = A.copy()\n    for _ in range(30):\n        ev = (x & 1) == 0\n        if not ev.any():\n            break\n        x[ev] >>= 1\n    diag = int(x.sum())\n\n    ans = (total + diag) // 2\n    sys.stdout.write(str(ans) + \"\\n\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 5784,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "arc189_c",
+        "code": "import sys\nfrom bisect import bisect_left\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    vals = list(map(int, data))\n    n = vals[0]; x = vals[1]\n    A = vals[2:2+n]\n    B = vals[2+n:2+2*n]\n    P = vals[2+2*n:2+3*n]\n    Q = vals[2+3*n:2+4*n]\n\n    def build(perm, W):\n        # cycle containing x\n        cyc = [x]\n        cur = perm[x-1]\n        while cur != x:\n            cyc.append(cur)\n            cur = perm[cur-1]\n        L = len(cyc)\n        dist = [-1] * (n + 1)\n        for k in range(L):\n            b = cyc[k]\n            dist[b] = (L - k) % L\n        M = 0\n        for i in range(n):\n            if W[i]:\n                b = i + 1\n                if dist[b] < 0:\n                    return None\n                if dist[b] > M:\n                    M = dist[b]\n        # boxes with distance M, M-1, ..., 1  (in that order)\n        return cyc[L - M:]\n\n    Rseq = build(P, A)\n    if Rseq is None:\n        sys.stdout.write(\"-1\\n\")\n        return\n    Bseq = build(Q, B)\n    if Bseq is None:\n        sys.stdout.write(\"-1\\n\")\n        return\n\n    posB = {}\n    for i, b in enumerate(Bseq):\n        posB[b] = i\n\n    tails = []\n    for b in Rseq:\n        v = posB.get(b, -1)\n        if v >= 0:\n            j = bisect_left(tails, v)\n            if j == len(tails):\n                tails.append(v)\n            else:\n                tails[j] = v\n    lcs = len(tails)\n    sys.stdout.write(str(len(Rseq) + len(Bseq) - lcs) + \"\\n\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 17962,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "arc189_d",
+        "code": "import sys\nimport numpy as np\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0])\n    A = list(map(int, data[1:1 + n]))\n\n    # previous index with A[j] >= A[i]\n    prevGE = [-1] * n\n    st_i = []; st_v = []\n    for i, a in enumerate(A):\n        while st_v and st_v[-1] < a:\n            st_v.pop(); st_i.pop()\n        if st_i:\n            prevGE[i] = st_i[-1]\n        st_i.append(i); st_v.append(a)\n\n    # next index with A[j] > A[i]\n    nextG = [n] * n\n    st_i = []; st_v = []\n    for i in range(n - 1, -1, -1):\n        a = A[i]\n        while st_v and st_v[-1] <= a:\n            st_v.pop(); st_i.pop()\n        if st_i:\n            nextG[i] = st_i[-1]\n        st_i.append(i); st_v.append(a)\n\n    Anp = np.array(A, dtype=np.int64)\n    l = np.array(prevGE, dtype=np.int64) + 1\n    r = np.array(nextG, dtype=np.int64) - 1\n\n    pref = np.zeros(n + 1, dtype=np.int64)\n    np.cumsum(Anp, out=pref[1:])\n    S = pref[r + 1] - pref[l]\n\n    lm1 = l - 1\n    rp1 = r + 1\n    has_l = lm1 >= 0\n    has_r = rp1 <= n - 1\n    lm1c = np.where(has_l, lm1, 0)\n    rp1c = np.where(has_r, rp1, 0)\n    both = has_l & has_r\n\n    parent = np.full(n, -1, dtype=np.int64)\n    only_l = has_l & (~has_r)\n    only_r = (~has_l) & has_r\n    parent = np.where(only_l, lm1c, parent)\n    parent = np.where(only_r, rp1c, parent)\n    pick = np.where(Anp[lm1c] < Anp[rp1c], lm1c, rp1c)\n    parent = np.where(both, pick, parent)\n\n    pc = np.where(parent >= 0, parent, 0)\n    cond = (parent >= 0) & (S > Anp[pc])\n    idx = np.arange(n, dtype=np.int64)\n    f = np.where(cond, pc, idx)\n\n    # pointer doubling to find topmost reachable node\n    while True:\n        f2 = f[f]\n        if np.array_equal(f2, f):\n            break\n        f = f2\n\n    B = S[f]\n\n    Anext = np.empty(n, dtype=np.int64)\n    if n > 1:\n        Anext[:n - 1] = Anp[1:]\n    Anext[n - 1] = -1\n\n    stuck = (l == idx) & (r > idx) & (Anext == Anp)\n    ans = np.where(stuck, Anp, B)\n\n    sys.stdout.write(' '.join(map(str, ans.tolist())))\n    sys.stdout.write('\\n')\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 31281,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "arc189_b",
+        "code": "import sys\n\ndef main():\n    data = sys.stdin.buffer.read().split()\n    n = int(data[0])\n    X = list(map(int, data[1:1+n]))\n    d = [X[i+1]-X[i] for i in range(n-1)]\n    # indices 0-based: position i (0-based) corresponds to i+1 (1-based), weight n-(i+1)\n    odd = sorted(d[0::2])   # 1-based odd indices\n    even = sorted(d[1::2])  # 1-based even indices\n    total = n * X[0]\n    # 1-based indices 1,3,5,... -> 0-based 0,2,4,...\n    for k, g in enumerate(odd):\n        idx = 2*k + 1  # 1-based\n        total += (n - idx) * g\n    for k, g in enumerate(even):\n        idx = 2*k + 2\n        total += (n - idx) * g\n    sys.stdout.write(str(total) + \"\\n\")\n\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 2024,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "3680",
+        "code": "from typing import List\n\nclass Solution:\n    def countComponents(self, nums: List[int], threshold: int) -> int:\n        present = bytearray(threshold + 1)\n        big = 0\n        for x in nums:\n            if x <= threshold:\n                present[x] = 1\n            else:\n                big += 1\n\n        parent = list(range(threshold + 1))\n\n        def find(x):\n            p = parent\n            while p[x] != x:\n                p[x] = p[p[x]]\n                x = p[x]\n            return x\n\n        for d in range(1, threshold + 1):\n            sl = present[d::d]\n            idx = sl.find(1)\n            if idx < 0:\n                continue\n            mn = d * (idx + 1)\n            # m must satisfy mn * m / d <= threshold  =>  (m//d) <= threshold//mn\n            khigh = threshold // mn  # k+1 <= khigh  => k <= khigh-1, so end bound = khigh\n            if khigh <= idx + 1:\n                continue\n            rmn = find(mn)\n            k = sl.find(1, idx + 1, khigh)\n            while k != -1:\n                m = d * (k + 1)\n                rm = find(m)\n                if rm != rmn:\n                    parent[rm] = rmn\n                    rmn = find(mn)\n                k = sl.find(1, k + 1, khigh)\n\n        roots = set()\n        for x in nums:\n            if x <= threshold:\n                roots.add(find(x))\n        return len(roots) + big",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 2859,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      },
+      {
+        "question_id": "abc383_e",
+        "code": "import sys\ndef main():\n    data = sys.stdin.buffer.read().split()\n    idx = 0\n    n = int(data[idx]); idx+=1\n    m = int(data[idx]); idx+=1\n    k = int(data[idx]); idx+=1\n    edges = []\n    us = [0]*m; vs=[0]*m; ws=[0]*m\n    for i in range(m):\n        u = int(data[idx]); idx+=1\n        v = int(data[idx]); idx+=1\n        w = int(data[idx]); idx+=1\n        us[i]=u; vs[i]=v; ws[i]=w\n    cntA = [0]*(n+1)\n    cntB = [0]*(n+1)\n    for i in range(k):\n        a = int(data[idx]); idx+=1\n        cntA[a]+=1\n    for i in range(k):\n        b = int(data[idx]); idx+=1\n        cntB[b]+=1\n    order = sorted(range(m), key=lambda i: ws[i])\n    parent = list(range(n+1))\n    rank_ = [0]*(n+1)\n    def find(x):\n        r = x\n        while parent[r] != r:\n            r = parent[r]\n        while parent[x] != r:\n            parent[x], x = r, parent[x]\n        return r\n    ans = 0\n    for i in order:\n        w = ws[i]\n        ru = find(us[i]); rv = find(vs[i])\n        if ru == rv:\n            continue\n        a1 = cntA[ru]; b1 = cntB[ru]\n        a2 = cntA[rv]; b2 = cntB[rv]\n        newm = min(a1+a2, b1+b2) - min(a1,b1) - min(a2,b2)\n        if newm > 0:\n            ans += newm * w\n        if rank_[ru] < rank_[rv]:\n            ru, rv = rv, ru\n        parent[rv] = ru\n        if rank_[ru] == rank_[rv]:\n            rank_[ru] += 1\n        cntA[ru] = a1+a2\n        cntB[ru] = b1+b2\n    sys.stdout.write(str(ans)+\"\\n\")\nmain()",
+        "status": "ok",
+        "finish_reason": "stop",
+        "completion_tokens": 1125,
+        "truncated_calls": null,
+        "passed": true,
+        "passed_before_regrade": true
+      }
+    ],
+    "pass@1_before_regrade": 85.0
+  }
+}
