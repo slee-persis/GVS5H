@@ -26,16 +26,16 @@ R4 = f"{ROOT}/runs/4models-1pass-reason-on/results"
 RF = f"{ROOT}/runs/fable5-5pass-single/results"
 
 MODELS = [
-    ("fable", "Claude Fable 5", f"{RF}/fable5_single_p%d.regraded.json", None),
-    ("terra", "GPT-5.6-Terra", f"{R4}/terra_single_p%d.regraded.json",
-                               f"{R4}/terra_multiagent_p%d.regraded.json"),
-    ("luna",  "GPT-5.6-Luna",  f"{R4}/luna_single_p%d.regraded.json",
-                               f"{R4}/luna_multiagent_p%d.regraded.json"),
-    ("q38",   "Qwen3.8-27B",   f"{R4}/q38_single_p%d.cap128k.regraded.json",
-                               f"{R4}/q38_multiagent_p%d.regraded.json"),
+    ("fable", "Claude Fable 5", f"{RF}/fable5_single_p%d.patched.json", None),
+    ("terra", "GPT-5.6-Terra", f"{R4}/terra_single_p%d.patched.json",
+                               f"{R4}/terra_multiagent_p%d.patched.json"),
+    ("luna",  "GPT-5.6-Luna",  f"{R4}/luna_single_p%d.patched.json",
+                               f"{R4}/luna_multiagent_p%d.patched.json"),
+    ("q38",   "Qwen3.8-27B",   f"{R4}/q38_single_p%d.cap128k.patched.json",
+                               f"{R4}/q38_multiagent_p%d.patched.json"),
 ]
 
-Q38_ASGEN = f"{R4}/q38_single_p%d.regraded.json"
+Q38_ASGEN = f"{R4}/q38_single_p%d.patched.json"
 
 FILLS = {k: palette.FILLS[k] for k in ("q38", "luna", "terra", "fable")}
 FABLE_DARK = FILLS["fable"][1]

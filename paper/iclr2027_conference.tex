@@ -54,12 +54,13 @@ cost. We introduce ledger-based zero-shot self-orchestration, a training-free me
 which fresh instances of one model decompose problems and coordinate through a shared
 filesystem holding a plan, notes and current solution. Across nine open and closed-weight
 models on the 100 latest \emph{hard} LiveCodeBench problems, the method yields gains of up
-to 23.4 percentage points on pinned backends and offers two routes to near-frontier
-accuracy. Orchestrated GPT-5.6-Terra reaches 85.0\% pass@1 against Fable 5's 87.4\% at 19\%
-of the cost, and locally served, open-weight Qwen3.8-27B rises from 63.0\% to 86.4\%. Gains
-are not universal: some models are unchanged or worse. Transcript analysis attributes the
-gain to decomposition and persistent context. Inference-time organization can approach
-frontier coding accuracy at a fraction of the cost, or on self-hostable weights.
+to 23.2 percentage points on pinned backends and offers two routes to frontier-level
+accuracy. Orchestrated GPT-5.6-Terra reaches 88.0\% pass@1 against Fable 5's 90.4\% at 19\%
+of the cost, and locally served, open-weight Qwen3.8-27B rises from 69.2\% to 92.4\%,
+slightly exceeding Fable 5. Gains are not universal: some models are unchanged or worse.
+Transcript analysis attributes the gain to decomposition and persistent context.
+Inference-time organization can approach frontier coding accuracy at a fraction of the cost,
+or slightly exceed it on self-hostable weights.
 \end{abstract}
 
 \section{Introduction}
@@ -87,21 +88,23 @@ with a short generic prompt. Section~\ref{sec:method} describes the loop and
 Appendix~\ref{app:scaffold} gives it in full.
 
 On the 100 most recent \emph{hard} LiveCodeBench problems \citep{jain2024}, our training-free
-filesystem scaffold improves all three models tested in both arms on a pinned backend by 8.0 to
-23.4 points across five paired passes, despite using no router, reward model, search policy,
+filesystem scaffold improves all three models tested in both arms on a pinned backend by 7.2 to
+23.2 points across five paired passes, despite using no router, reward model, search policy,
 or benchmark-specific tuning
 (Sections~\ref{sec:method} and~\ref{sec:pinned}). Although the scaffold roughly triples the
 bill, orchestrating a cheaper model remains the less expensive route to comparable accuracy in
 every supported comparison: orchestrated GPT-5.6-Terra trails Claude Fable 5 by 2.4 points
-while costing \$11.71 rather than \$61.11 per pass, Qwen3.8-27B comes within 1.0 point, and
+while costing \$11.71 rather than \$61.11 per pass, Qwen3.8-27B slightly exceeds it by 2.0
+points at \$51.75, and
 GPT-5.6-Luna matches GPT-5.6-Terra's single-call performance at 44\% of the price
 (Section~\ref{sec:cost}). These gains diminish as single-call performance rises and can
 disappear or reverse: two of the nine models come out flat or negative, with Qwen3.6-35B's
 transcripts under reasoning off showing deliberation discarding correct approaches and
 unverified worker output overwriting correct work
-(Sections~\ref{sec:openrouter} and~\ref{sec:discussion}). We also correct a LiveCodeBench
-evaluator bug that penalizes a common input-reading idiom and may therefore affect previously
-reported scores (Appendix~\ref{app:evaluator}).
+(Sections~\ref{sec:openrouter} and~\ref{sec:discussion}). We also correct LiveCodeBench
+evaluator defects that penalize common input- and output-handling idioms and mis-grade problems
+with more than one correct answer, and may therefore affect previously reported scores
+(Appendix~\ref{app:evaluator}).
 
 \section{Related work}
 \label{sec:related}
@@ -220,7 +223,7 @@ OpenRouter-served results of Section~\ref{sec:openrouter}.
 \paragraph{Benchmark.} LiveCodeBench code-generation, release\_v6 \citep{jain2024}: the 100
 most recent problems in the hard split by contest date, which limits training-data
 contamination \citep{jain2024}. We refer to this set as LCB-100. Solutions are graded by
-LiveCodeBench's own hidden-test evaluator, after the correction described in
+LiveCodeBench's own hidden-test evaluator, after the corrections described in
 Appendix~\ref{app:evaluator}; every number below is post-correction. The verifier of step 5
 runs only stdin-format public tests, which 73 of the 100 problems carry.
 
@@ -268,15 +271,16 @@ gateway whose routing proved the main source of run-to-run noise.
 \textbf{All three models with both arms benefit from the manager.} It also narrows
 run-to-run spread wherever that spread was wide, for Luna and Qwen3.8-27B alike. Luna's
 per-pass $\Delta$ swings across a wide band, so its effect is real but its per-pass estimate
-unstable; Terra's flat band is the more reliable. Qwen3.8-27B gains most, its manager arm
-reaching Fable 5's single-call range here, and Opus-5's in the OpenRouter-served set. The
+unstable; Terra's narrow band is the more reliable. Qwen3.8-27B gains most, its manager arm
+slightly exceeding Fable 5's single call here, and Opus-5's single call in the OpenRouter-served
+set. The
 direction matches that set's reasoning-on pattern: the smaller the model, the more the
 scaffold has to add.
 
 Figure~\ref{fig:main} orders the four models by single-call score: the manager's gain shrinks
-monotonically as the single call gets stronger, with two of the manager arms here coming
-within a few points of Fable 5's single call, whose lone bar marks where that trend is
-heading.
+monotonically as the single call gets stronger. Terra's manager arm comes within a few points of
+Fable 5's single call and Qwen3.8-27B's slightly exceeds it; Fable 5's lone bar marks where that
+trend is heading.
 
 \subsection{What the scaffold costs}
 \label{sec:cost}
@@ -308,15 +312,15 @@ First, GPT-5.6-Terra with a manager nearly matches Fable 5 for a fifth of the pr
 priced off API list rates in effect when the experiments were run
 \citep{openai2026price,anthropic2026price}.
 
-Second, Qwen3.8-27B with a manager comes within a point of Fable 5's accuracy and costs less.
-That difference is again within error, the one-sided 95\% bound allowing a deficit of up to
-4.8 points. The cost uses a third-party OpenRouter host rate \citep{openrouter2026}; our test
+Second, Qwen3.8-27B with a manager slightly exceeds Fable 5's accuracy, by 2.0 points, and costs
+less. That difference is again within error, the one-sided 95\% bound allowing a deficit of up
+to 0.8 points. The cost uses a third-party OpenRouter host rate \citep{openrouter2026}; our test
 ran locally, and anyone with capable hardware could host it for less.
 
 Third, the two GPT-5.6 models make the clearest case for spending on the scaffold rather than
 on the model: GPT-5.6-Luna with a manager matches GPT-5.6-Terra's single call on accuracy at
 under half the price. Luna's lead is not itself significant, but there is no sign of a deficit
-either, and the bound rules out its trailing by more than 2.4 points.
+either, and the bound rules out its trailing by more than 2.5 points.
 
 \subsection{The effect of truncation}
 \label{sec:truncation}
@@ -328,8 +332,8 @@ emits an empty answer across all 2{,}000 of their problem-passes, so their $\Del
 pinned-backend set carry no rescue component. The channel is largest on Qwen3.8-27B, and even
 there a cut-off rate is not a loss rate: most truncated generations still contain a complete
 solution, written inside the reasoning stream before the cap arrived and recovered from there
-by the extractor. Of the single arm's 35 empty cells, the manager solves 25, fails 10 and
-leaves none empty, worth 5.0 points, about a fifth of its gain --- a cut-off worker costs a
+by the extractor. Of the single arm's 35 empty cells, the manager solves 28, fails 7 and
+leaves none empty, worth 5.6 points, about a quarter of its gain --- a cut-off worker costs a
 round rather than the answer. Served locally at a 262{,}144-token context, Qwen3.8-27B's
 single arm was in fact generated at 250k and cap-matched to 128k afterwards
 (Appendix~\ref{app:protocol}); read at its original 250k cap it gains a little more, by
@@ -337,7 +341,7 @@ shrinking the truncation tail rather than lifting the run (Table~\ref{tab:qwen-c
 reading is exploratory, cap-matched to nothing else in the paper, so it cannot carry a
 $\Delta$ against the manager arm. Re-scoring each single arm over only the problem-passes
 where it emitted code bounds the effect model by model (Table~\ref{tab:emitted}); Fable 5
-gains 1.6 points there, six of its nine empty cells being safety refusals rather than
+gains 1.7 points there, six of its nine empty cells being safety refusals rather than
 truncations (Section~\ref{sec:discussion}).
 
 \subsection{The OpenRouter-served model set}
@@ -347,8 +351,8 @@ The five models below were served through the OpenRouter gateway and run on the 
 scaffold, so they are not directly comparable to the pinned-backend arms above.
 Table~\ref{tab:openrouter} collects every condition.
 
-\paragraph{Reasoning on.} Opus-5 tops the study, its $+6$ a net of seven problems gained and
-one lost. The largest gains come from the smaller models (Figure~\ref{fig:scale-bars}a):
+\paragraph{Reasoning on.} Opus-5 tops the study, its $+7$ made of seven problems gained and
+none lost. The largest gains come from the smaller models (Figure~\ref{fig:scale-bars}a):
 ordered by scale, the single curve rises further than the manager curve, so the scaffold
 narrows the spread across model sizes (Figure~\ref{fig:scale-on}, which plots the same numbers
 against parameter count).
@@ -449,9 +453,9 @@ acceptance would catch regressions of this kind, at the cost of extra calls.
 
   \item \textbf{Single pass in the OpenRouter-served set.} The reasoning-on and 128k
   reasoning-off comparisons there are one pass per condition, to limit API cost, so their deltas
-  are point estimates within the ${\sim}4.5$ percentage points of pass-to-pass variation the 16k
+  are point estimates within the ${\sim}4.2$ percentage points of pass-to-pass variation the 16k
   five-pass runs show on a manager-minus-single delta; per-model significance rests on those
-  five-pass runs. It is also why Opus-5's $85 \to 91$, the highest score in the paper, remains a
+  five-pass runs. It is also why Opus-5's $88 \to 95$, the highest score in the paper, remains a
   point estimate rather than a measured effect.
 
   \item \textbf{Fable 5 has no manager arm.} It was run single-only, so the strongest
@@ -497,9 +501,9 @@ attributes the gain to decomposition and to context that persists across calls.
 
 The scaffold roughly triples the token bill, yet in every comparison our data supports,
 orchestrating a cheaper model was the less expensive route to a given accuracy than switching to
-a larger one. That leaves two ways to approach frontier coding accuracy without paying frontier
-prices: orchestrate a cheaper API model, or orchestrate open weights small enough to serve
-locally. The result is conditional rather than general --- the gains shrink as the single call
+a larger one. That leaves two ways to reach frontier coding accuracy without paying frontier
+prices: orchestrate a cheaper API model to approach it, or orchestrate open weights small enough
+to serve locally, which here slightly exceed it. The result is conditional rather than general --- the gains shrink as the single call
 gets stronger, and some configurations come out flat or worse, where deliberation displaces an
 approach that was already right --- but where it holds, inference-time organization substitutes
 for model scale.
@@ -693,6 +697,20 @@ number is re-scored all the same, and exactly one cell moves: Kimi-K3's 128k rea
 arm, from 82 to 83. Because the idiom is a matter of coding style, a harness bug of this shape is
 not a wash across a leaderboard --- it silently penalizes the models whose style trips it.
 
+\paragraph{A second correction: judging and output.} Two further defects remain, and every number
+in Section~\ref{sec:results} is also reported after correcting them. First, the evaluator
+string-compares each output against a single reference answer, yet four LCB-100 problems accept
+more than one correct output: three ask for any answer meeting an objective
+(\texttt{abc396\_e}, \texttt{arc190\_a}, \texttt{arc195\_c}) and one (\texttt{abc385\_f}) states
+a floating-point error tolerance. We grade these with checkers that re-implement the original
+contest judges. Second, the output half of the defect above: the evaluator captures
+\texttt{sys.stdout} into a \texttt{StringIO}, which has no \texttt{.buffer}, so a program writing
+through \texttt{sys.stdout.buffer.write()} dies before printing a byte. We re-ran every recorded
+failure to which either defect can apply, each as a real subprocess with real pipes; a pass under
+exact match remains a pass under the more lenient judge, so no verdict moves from pass to fail.
+The correction raises every pinned-backend arm, by 3.0 to 6.2 points, and moves the
+OpenRouter-served cells by at most 4 points.
+
 \section{Additional results}
 \label{app:results}
 
@@ -745,8 +763,8 @@ at 250k.}
 \textbf{Qwen3.8-27B single} & \textbf{pass@1} & \textbf{Cut off by the cap} &
 \textbf{No code at all} \\
 \midrule
-128k (cap-matched, App.~\ref{app:protocol}) & $63.0 \pm 4.1$ & 150 / 500 \ (30.0\,\%) & 35 / 500 \ (7.0\,\%) \\
-250k (as generated)                         & $65.6 \pm 4.6$ & 124 / 500 \ (24.8\,\%) & 21 / 500 \ (4.2\,\%) \\
+128k (cap-matched, App.~\ref{app:protocol}) & $69.2 \pm 4.9$ & 150 / 500 \ (30.0\,\%) & 35 / 500 \ (7.0\,\%) \\
+250k (as generated)                         & $70.0 \pm 4.5$ & 124 / 500 \ (24.8\,\%) & 21 / 500 \ (4.2\,\%) \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -761,10 +779,10 @@ at 250k.}
 \textbf{Model (single arm)} & \textbf{As scored} & \textbf{Emitted code} &
 \textbf{Restricted to those} \\
 \midrule
-GPT-5.6-Terra  & 77.0 & 500/500 & 77.0 \\
-GPT-5.6-Luna   & 67.2 & 500/500 & 67.2 \\
-Qwen3.8-27B    & 63.0 & 465/500 & 67.7 ($+4.7$) \\
-Claude Fable 5 & 87.4 & 491/500 & 89.0 ($+1.6$) \\
+GPT-5.6-Terra  & 80.8 & 500/500 & 80.8 \\
+GPT-5.6-Luna   & 70.4 & 500/500 & 70.4 \\
+Qwen3.8-27B    & 69.2 & 465/500 & 72.7 ($+3.5$) \\
+Claude Fable 5 & 90.4 & 491/500 & 92.1 ($+1.7$) \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -783,11 +801,11 @@ version differ (Section~\ref{sec:setup}).}
 \textbf{Model} & \textbf{Params} & \textbf{128k $\cdot$ ON (1 pass)} &
 \textbf{128k $\cdot$ OFF (1 pass)} & \textbf{16k $\cdot$ OFF ($\times$5)} \\
 \midrule
-Opus-5        & n/a            & 85 $\to$ 91 (\textbf{+6})            & --                      & -- \\
-Kimi-K3       & ${\sim}2.8$T   & 83 $\to$ 82 ($-1$)                   & 32 $\to$ 74 (\textbf{+42}) & 32.2 $\to$ 62.6 (\textbf{+30.4}) \\
-MiniMax-M3    & 428B           & 60 $\to$ 66 (+6)                     & 25 $\to$ 37 (\textbf{+12}) & 21.2 $\to$ 32.2 (\textbf{+11.0}) \\
-Qwen3.6-35B   & 35B            & 25 $\to$ 43 (\textbf{+18})           & 35 $\to$ 26 ($-9$)         & 27.8 $\to$ 26.6 ($-1.2$) \\
-Qwen3.5-9B    & 9B             & \emph{unusable}                      & 17 $\to$ 20 (+3)           & 14.6 $\to$ 21.8 (\textbf{+7.2}) \\
+Opus-5        & n/a            & 88 $\to$ 95 (\textbf{+7})            & --                      & -- \\
+Kimi-K3       & ${\sim}2.8$T   & 86 $\to$ 86 (0)                      & 33 $\to$ 76 (\textbf{+43}) & 33.4 $\to$ 65.0 (\textbf{+31.6}) \\
+MiniMax-M3    & 428B           & 62 $\to$ 69 (+7)                     & 26 $\to$ 40 (\textbf{+14}) & 22.2 $\to$ 33.2 (\textbf{+11.0}) \\
+Qwen3.6-35B   & 35B            & 26 $\to$ 44 (\textbf{+18})           & 35 $\to$ 27 ($-8$)         & 28.2 $\to$ 27.4 ($-0.8$) \\
+Qwen3.5-9B    & 9B             & \emph{unusable}                      & 18 $\to$ 21 (+3)           & 15.0 $\to$ 22.6 (\textbf{+7.6}) \\
 \bottomrule
 \end{tabular}
 \end{table}

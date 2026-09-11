@@ -3,7 +3,7 @@
 set -u
 cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 1   # codebase/v2-current
 ROOT="$(cd ../.. && pwd)"                              # repo root
-PYTHON=(uv run --no-project --python 3.12 --with datasets --with numpy --with anthropic python)
+PYTHON=(uv run --no-project --python 3.12 --with 'datasets<4' --with numpy --with anthropic python)
 
 export LCB_RELEASE=release_v6
 export HF_HOME="${HF_HOME:-$HOME/.cache/huggingface}"

@@ -25,13 +25,13 @@ PASSES = [1, 2, 3, 4, 5]
 CAP = 128_000
 
 ARMS = {
-    "q38_single":   ("Qwen3.8-27B, single call",    f"{R4}/q38_single_p%d.cap128k.regraded.json",  (0.35, 2.75), "q38", "single"),
-    "q38_multi":    ("Qwen3.8-27B, with manager",   f"{R4}/q38_multiagent_p%d.regraded.json",      (0.35, 2.75), "q38", "manager"),
-    "luna_single":  ("GPT-5.6-Luna, single call",   f"{R4}/luna_single_p%d.regraded.json",         (0.20, 1.20), "luna", "single"),
-    "luna_multi":   ("GPT-5.6-Luna, with manager",  f"{R4}/luna_multiagent_p%d.regraded.json",     (0.20, 1.20), "luna", "manager"),
-    "terra_single": ("GPT-5.6-Terra, single call",  f"{R4}/terra_single_p%d.regraded.json",        (2.0, 12.0),  "terra", "single"),
-    "terra_multi":  ("GPT-5.6-Terra, with manager", f"{R4}/terra_multiagent_p%d.regraded.json",    (2.0, 12.0),  "terra", "manager"),
-    "fable_single": ("Fable 5, single call",        f"{RF}/fable5_single_p%d.regraded.json",       (10.0, 50.0), "fable", "single"),
+    "q38_single":   ("Qwen3.8-27B, single call",    f"{R4}/q38_single_p%d.cap128k.patched.json",  (0.35, 2.75), "q38", "single"),
+    "q38_multi":    ("Qwen3.8-27B, with manager",   f"{R4}/q38_multiagent_p%d.patched.json",      (0.35, 2.75), "q38", "manager"),
+    "luna_single":  ("GPT-5.6-Luna, single call",   f"{R4}/luna_single_p%d.patched.json",         (0.20, 1.20), "luna", "single"),
+    "luna_multi":   ("GPT-5.6-Luna, with manager",  f"{R4}/luna_multiagent_p%d.patched.json",     (0.20, 1.20), "luna", "manager"),
+    "terra_single": ("GPT-5.6-Terra, single call",  f"{R4}/terra_single_p%d.patched.json",        (2.0, 12.0),  "terra", "single"),
+    "terra_multi":  ("GPT-5.6-Terra, with manager", f"{R4}/terra_multiagent_p%d.patched.json",    (2.0, 12.0),  "terra", "manager"),
+    "fable_single": ("Fable 5, single call",        f"{RF}/fable5_single_p%d.patched.json",       (10.0, 50.0), "fable", "single"),
 }
 LABEL = {"q38": "Qwen3.8-27B", "luna": "GPT-5.6-Luna", "terra": "GPT-5.6-Terra",
          "fable": "Claude Fable 5"}

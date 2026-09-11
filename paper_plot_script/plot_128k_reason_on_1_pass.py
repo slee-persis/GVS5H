@@ -55,7 +55,7 @@ def notes(stats):
 # --------------------------------------------------------------------------- data
 
 def load_arm(model, arm):
-    recs = json.load(open(f"{RESULTS}/{model}_{arm}.regraded.json"))["lcb"]["records"]
+    recs = json.load(open(f"{RESULTS}/{model}_{arm}.patched.json"))["lcb"]["records"]
     return ([r["question_id"] for r in recs],
             np.array([bool(r["passed"]) for r in recs], float),
             np.array([bool((r.get("code") or "").strip()) for r in recs], float))

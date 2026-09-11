@@ -18,7 +18,7 @@ past the reasoning, it sees a truncated answer; inside the reasoning, the answer
 exist at all and the harness's empty-content fallback hands it the truncated reasoning
 instead -- which is why so many cut-off generations still yield code (S2.2).
 
-    uv run --no-project --python 3.12 --with datasets --with numpy python escalation/capmatch_q38.py
+    uv run --no-project --python 3.12 --with 'datasets<4' --with numpy python escalation/capmatch_q38.py
 
 Writes <name>.cap128k.json next to each source file; grade them with regrade.py.
 """

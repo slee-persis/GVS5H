@@ -30,19 +30,19 @@ PASSES = [1, 2, 3, 4, 5]
 
 ARMS = {
     "q38_single": ("Qwen3.8-27B, single call",
-                   f"{R4}/q38_single_p%d.cap128k.regraded.json", (0.35, 2.75)),
+                   f"{R4}/q38_single_p%d.cap128k.patched.json", (0.35, 2.75)),
     "q38_multi": ("Qwen3.8-27B, with manager",
-                  f"{R4}/q38_multiagent_p%d.regraded.json", (0.35, 2.75)),
+                  f"{R4}/q38_multiagent_p%d.patched.json", (0.35, 2.75)),
     "luna_single": ("GPT-5.6-Luna, single call",
-                    f"{R4}/luna_single_p%d.regraded.json", (0.20, 1.20)),
+                    f"{R4}/luna_single_p%d.patched.json", (0.20, 1.20)),
     "luna_multi": ("GPT-5.6-Luna, with manager",
-                   f"{R4}/luna_multiagent_p%d.regraded.json", (0.20, 1.20)),
+                   f"{R4}/luna_multiagent_p%d.patched.json", (0.20, 1.20)),
     "terra_single": ("GPT-5.6-Terra, single call",
-                     f"{R4}/terra_single_p%d.regraded.json", (2.0, 12.0)),
+                     f"{R4}/terra_single_p%d.patched.json", (2.0, 12.0)),
     "terra_multi": ("GPT-5.6-Terra, with manager",
-                    f"{R4}/terra_multiagent_p%d.regraded.json", (2.0, 12.0)),
+                    f"{R4}/terra_multiagent_p%d.patched.json", (2.0, 12.0)),
     "fable_single": ("Fable 5, single call",
-                     f"{ROOT}/runs/fable5-5pass-single/results/fable5_single_p%d.regraded.json",
+                     f"{ROOT}/runs/fable5-5pass-single/results/fable5_single_p%d.patched.json",
                      (10.0, 50.0)),
 }
 CAP = 128_000

@@ -1,18 +1,5 @@
 #!/usr/bin/env python3
-"""Write the *.patched.json twins the plot scripts read.
-
-Each output is a byte-for-byte copy of the matching *.regraded.json with two changes: every
-record's `passed` is taken from runs/patched_verdicts.json, and lcb.pass@1 is recomputed
-from those. Everything else -- `code`, `finish_reason`, token counts -- is carried through
-untouched, because the charts compute emit rates, cap hits and cost from those fields and
-the patch changes none of them.
-
-Why a file per arm rather than having each chart read patched_verdicts.json directly: the
-plot scripts already know how to read a results JSON, and a one-word path change keeps them
-honest about which grading they drew.
-
-    uv run python paper_plot_script/make_patched_files.py
-"""
+"""Write the *.patched.json twins the plot scripts read."""
 import os
 import json
 
@@ -20,7 +7,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 VERDICTS = os.path.join(ROOT, "runs", "patched_verdicts.json")
 
-# run directory in patched_verdicts.json -> directory holding the results JSONs
 RUN_DIRS = {
     "128k-reasoning-on-1pass": "runs/128k-reasoning-on-1pass/results",
     "128k-reasoning-off-1pass": "runs/128k-reasoning-off-1pass/results",

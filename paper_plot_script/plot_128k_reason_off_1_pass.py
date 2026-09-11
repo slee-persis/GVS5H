@@ -39,7 +39,7 @@ def notes(stats):
 # --------------------------------------------------------------------------- data
 
 def load_arm(model, arm):
-    lcb = json.load(open(f"{RESULTS}/{model}_{arm}.regraded.json")).get("lcb")
+    lcb = json.load(open(f"{RESULTS}/{model}_{arm}.patched.json")).get("lcb")
     recs = lcb["records"]
     return ([r["question_id"] for r in recs],
             np.array([bool(r["passed"]) for r in recs]),

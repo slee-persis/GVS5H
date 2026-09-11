@@ -119,7 +119,7 @@ def apply_theme(t):
 def load_arm(model, arm):
     qids, passed, nonempty = None, [], []
     for p in PASSES:
-        fn = f"{RESULTS}/{model}_{arm}_p{p}.regraded.json"
+        fn = f"{RESULTS}/{model}_{arm}_p{p}.patched.json"
         if not os.path.exists(fn):
             continue
         lcb = json.load(open(fn)).get("lcb")

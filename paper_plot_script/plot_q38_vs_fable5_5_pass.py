@@ -23,11 +23,11 @@ R4 = f"{ROOT}/runs/4models-1pass-reason-on/results"
 PASSES = [1, 2, 3, 4, 5]
 
 ARMS = {
-    "q38_multi": ("Qwen3.8-27B, with manager", f"{R4}/q38_multiagent_p%d.regraded.json"),
-    "luna_multi": ("GPT-5.6-Luna, with manager", f"{R4}/luna_multiagent_p%d.regraded.json"),
-    "terra_multi": ("GPT-5.6-Terra, with manager", f"{R4}/terra_multiagent_p%d.regraded.json"),
+    "q38_multi": ("Qwen3.8-27B, with manager", f"{R4}/q38_multiagent_p%d.patched.json"),
+    "luna_multi": ("GPT-5.6-Luna, with manager", f"{R4}/luna_multiagent_p%d.patched.json"),
+    "terra_multi": ("GPT-5.6-Terra, with manager", f"{R4}/terra_multiagent_p%d.patched.json"),
     "fable_single": ("Fable-5, single call",
-                     f"{ROOT}/runs/fable5-5pass-single/results/fable5_single_p%d.regraded.json"),
+                     f"{ROOT}/runs/fable5-5pass-single/results/fable5_single_p%d.patched.json"),
 }
 
 TESTS = [
