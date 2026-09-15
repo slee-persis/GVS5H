@@ -20,20 +20,35 @@
 # (verified before this run), unlike Muse-Glimmer which needed MULTIAGENT_STRICT_FORMAT=1.
 # Reasoning is ON by default in this model's chat template; we send no reasoning_effort,
 # which litellm's config notes only prepends a sentence to the system prompt anyway.
+#
+# The previous commit holds this script exactly as it ran, from a working tree outside this
+# repo. This commit adapts the six machine-specific things -- working directory, PATH,
+# HF_HOME, OUT/WS, the litellm key lookup and the uv invocation -- to the repo layout used by
+# the sibling run_*.sh scripts. Every experimental setting is unchanged: the 250k/128k
+# per-arm caps, --parallel 12/24, the model alias, the timeout and the iteration limits.
 set -u
-cd /home/persis/model-test
+cd "$(dirname "${BASH_SOURCE[0]}")/../.." || exit 1     # codebase/v2-current
+ROOT="$(cd ../.. && pwd)"                               # repo root
 # uv lives in ~/.local/bin, which is on the INTERACTIVE PATH but not the one systemd gives a
 # user service. Scheduling this under a timer without it failed instantly with
 # "env: 'uv': No such file or directory" -- and, because wait_almost only polled for progress
 # and never checked whether the child was alive, the driver then slept for 40 hours.
-export PATH="/home/persis/.local/bin:$PATH"
+export PATH="$HOME/.local/bin:$PATH"
 command -v uv >/dev/null || { echo "FATAL: uv not on PATH ($PATH)"; exit 1; }
-export LCB_RELEASE=release_v6 HF_HOME=/storage/persis/hf_cache
+PYTHON=(uv run --no-project --python 3.12 --with 'datasets<4' --with numpy --with anthropic python)
+export LCB_RELEASE=release_v6
+export HF_HOME="${HF_HOME:-$HOME/.cache/huggingface}"
 export MULTIAGENT_MAX_ITERS=10 MULTIAGENT_MAX_TASKS=12
-OUT=escalation/runs/4models-1pass-reason-on/results
-WS=/home/persis/model-test/escalation/runs/4models-1pass-reason-on/ws
+OUT="$ROOT/runs/4models-1pass-reason-on/results"
+WS="$ROOT/runs/4models-1pass-reason-on/ws"
 IDS=escalation/lcb100_hardest_v6.json
-K=$(grep -m1 'master_key:' /home/persis/litellm/config.yaml | awk '{print $2}')
+mkdir -p "$OUT" "$WS"
+
+# The proxy key. Put LITELLM_KEY in escalation/.env (gitignored) or the environment; the
+# litellm config is only a fallback for the machine this originally ran on.
+set -a; [ -f escalation/.env ] && . escalation/.env; set +a
+LITELLM_CONFIG="${LITELLM_CONFIG:-/home/persis/litellm/config.yaml}"
+K="${LITELLM_KEY:-$(grep -m1 'master_key:' "$LITELLM_CONFIG" 2>/dev/null | awk '{print $2}')}"
 TAG=q38
 REMAIN=${REMAIN:-8}     # release the next run when this many problems are left (92/100)
 TOTAL=100
@@ -61,7 +76,7 @@ launch() {  # eng pass
       ESCALATION_CLOUD_TIMEOUT=14400 \
       MULTIAGENT_MODEL="groq:small-model" \
       MULTIAGENT_WS="$WS/${TAG}_${eng}_p${p}" \
-    uv run --project /home/persis/model-test python escalation/run_bench.py \
+    "${PYTHON[@]}" escalation/run_bench.py \
       --engine "$eng" --only lcb --lcb "$TOTAL" --ids-file "$IDS" --parallel "$par" --out "$out" \
       > "/tmp/camp_${TAG}_${eng}_p${p}.log" 2>&1 &
   LAST_PID=$!
