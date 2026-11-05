@@ -1,4 +1,4 @@
-<h1 align="center"><img src="assets/persis-icon.png" alt="Persis" width="36" height="36" align="absmiddle"/> Persis Capital Inc. Research Lab</h1>
+<h1 align="center"><img src="assets/persis-icon.png" alt="Persis" width="32" height="38" align="absmiddle"/> Persis Capital Inc. Research</h1>
 
 <p align="center">
 <a href="https://arxiv.org/abs/2608.26480"><img src="https://img.shields.io/badge/arXiv-2608.26480-B31B1B?logo=arxiv&amp;logoColor=white" alt="arXiv:2608.26480"/></a>
